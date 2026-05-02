@@ -5,7 +5,7 @@ import type { BackendToken } from '../api/pool'
 import type { LatencySample, LatencyTaskType, TaskQueryRow } from '../types'
 
 const LATENCY_TYPES: LatencyTaskType[] = ['ping', 'tcp_ping', 'http_ping']
-const LIMIT_PER_TYPE = 40
+const LIMIT_PER_TYPE = 120
 const REFRESH_MS = 30_000
 
 interface LatencyState {
