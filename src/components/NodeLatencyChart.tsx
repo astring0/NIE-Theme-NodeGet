@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { EChartsOption } from 'echarts'
-import ReactECharts from 'echarts-for-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { MouseEvent, WheelEvent } from 'react'
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import { Button } from './ui/button'
 import { cn } from '../utils/cn'
@@ -29,7 +28,14 @@ const SERIES_COLORS = [
 ]
 
 const LOSS_THRESHOLD = 500
+const DAY_MS = 24 * 60 * 60 * 1000
 const DEFAULT_WINDOW_MS = 3 * 60 * 60 * 1000
+const MIN_WINDOW_MS = 60 * 1000
+const CHART_W = 1000
+const CHART_H = 320
+const M = { top: 18, right: 18, bottom: 36, left: 48 }
+const PLOT_W = CHART_W - M.left - M.right
+const PLOT_H = CHART_H - M.top - M.bottom
 
 interface Props {
   node: Node
@@ -44,6 +50,15 @@ interface LatencySeries {
   color: string
   samples: LatencySample[]
   latest: LatencySample
+}
+
+interface HoverRow {
+  key: string
+  label: string
+  color: string
+  sample: LatencySample
+  x: number
+  y: number
 }
 
 function seriesKeyOf(sample: LatencySample) {
@@ -119,119 +134,76 @@ function preferredType(types: LatencyTaskType[]) {
   return types[0] ?? 'tcp_ping'
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
 }
 
-function buildChartOption(visibleSeries: LatencySeries[], smooth: boolean): EChartsOption {
-  const allTimes = visibleSeries.flatMap(series => series.samples.map(sample => sample.t))
-  const minTs = allTimes.length ? Math.min(...allTimes) : Date.now()
-  const maxTs = allTimes.length ? Math.max(...allTimes) : Date.now()
-  const startValue = Math.max(minTs, maxTs - DEFAULT_WINDOW_MS)
+function fullDomainOf(series: LatencySeries[]): [number, number] {
+  const times = series.flatMap(item => item.samples.map(sample => sample.t))
+  const now = Date.now()
+  const min = times.length ? Math.min(...times) : now - DEFAULT_WINDOW_MS
+  const max = times.length ? Math.max(...times) : now
+  return max <= min ? [min - DEFAULT_WINDOW_MS, max + 1] : [Math.max(min, max - DAY_MS), max]
+}
 
-  return {
-    animation: false,
-    grid: { top: 20, right: 18, bottom: 56, left: 56 },
-    color: visibleSeries.map(series => series.color),
-    legend: { show: false },
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'line' },
-      backgroundColor: 'rgba(255,255,255,0.96)',
-      borderColor: '#e5e7eb',
-      borderWidth: 1,
-      textStyle: { color: '#111827', fontSize: 12 },
-      extraCssText: 'box-shadow: 0 8px 28px rgba(0,0,0,0.10); border-radius: 8px;',
-      formatter: (params: any) => {
-        const list = Array.isArray(params) ? params : [params]
-        const first = list[0]
-        const timeValue = first?.axisValue ?? first?.value?.[0]
-        const header = new Date(Number(timeValue)).toLocaleString()
-        const rows = list
-          .filter((item: any) => Array.isArray(item.value) && Number.isFinite(item.value[1]))
-          .sort((a: any, b: any) => Number(a.value[1]) - Number(b.value[1]))
-          .map((item: any) => {
-            const color = item.color || '#3b82f6'
-            const name = escapeHtml(String(item.seriesName || ''))
-            const value = latencyMs(Number(item.value[1]))
-            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:220px;">
-              <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-                <span style="width:8px;height:8px;border-radius:999px;background:${color};display:inline-block;flex:none;"></span>
-                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</span>
-              </div>
-              <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${value}</span>
-            </div>`
-          })
-          .join('')
-        return `<div style="display:flex;flex-direction:column;gap:6px;">
-          <div style="font-weight:600;">${escapeHtml(header)}</div>
-          ${rows || '<div>暂无数据</div>'}
-        </div>`
-      },
-    },
-    xAxis: {
-      type: 'time',
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: { color: '#64748b' },
-      splitLine: { show: false },
-    },
-    yAxis: {
-      type: 'value',
-      name: 'ms',
-      min: 0,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: { color: '#64748b' },
-      splitLine: { lineStyle: { color: 'rgba(100,116,139,0.10)' } },
-      nameTextStyle: { color: '#64748b', padding: [0, 0, 0, 4] },
-    },
-    dataZoom: [
-      {
-        type: 'inside',
-        xAxisIndex: 0,
-        startValue,
-        endValue: maxTs,
-        filterMode: 'none',
-        zoomOnMouseWheel: true,
-        moveOnMouseMove: true,
-        moveOnMouseWheel: false,
-        preventDefaultMouseMove: true,
-      },
-      {
-        type: 'slider',
-        xAxisIndex: 0,
-        height: 18,
-        bottom: 10,
-        brushSelect: false,
-        startValue,
-        endValue: maxTs,
-        filterMode: 'none',
-        borderColor: 'rgba(148,163,184,0.25)',
-        backgroundColor: 'rgba(148,163,184,0.10)',
-        fillerColor: 'rgba(59,130,246,0.12)',
-        moveHandleSize: 0,
-        handleSize: '100%',
-        handleStyle: { color: 'rgba(59,130,246,0.28)' },
-      },
-    ],
-    series: visibleSeries.map(series => ({
-      type: 'line',
-      name: series.target || series.label,
-      data: series.samples.map(sample => [sample.t, sample.value]),
-      showSymbol: false,
-      smooth,
-      lineStyle: { width: 2, color: series.color },
-      emphasis: { focus: 'series' },
-      connectNulls: true,
-      sampling: 'lttb',
-    })),
+function defaultDomainOf(series: LatencySeries[]): [number, number] {
+  const [min, max] = fullDomainOf(series)
+  return [Math.max(min, max - DEFAULT_WINDOW_MS), max]
+}
+
+function clampDomain(start: number, end: number, fullStart: number, fullEnd: number): [number, number] {
+  const fullWindow = Math.max(fullEnd - fullStart, MIN_WINDOW_MS)
+  const window = clamp(end - start, MIN_WINDOW_MS, fullWindow)
+  let nextStart = start
+  let nextEnd = start + window
+
+  if (nextEnd > fullEnd) {
+    nextEnd = fullEnd
+    nextStart = nextEnd - window
   }
+  if (nextStart < fullStart) {
+    nextStart = fullStart
+    nextEnd = nextStart + window
+  }
+  return [nextStart, nextEnd]
+}
+
+function formatTime(ts: number) {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function findNearest(samples: LatencySample[], t: number) {
+  if (!samples.length) return null
+  let lo = 0
+  let hi = samples.length - 1
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (samples[mid].t < t) lo = mid + 1
+    else hi = mid
+  }
+  const right = samples[lo]
+  const left = samples[lo - 1]
+  if (!left) return right
+  if (!right) return left
+  return Math.abs(left.t - t) <= Math.abs(right.t - t) ? left : right
+}
+
+function makeLinePath(points: [number, number][], smooth: boolean) {
+  if (!points.length) return ''
+  if (points.length === 1) return `M ${points[0][0]} ${points[0][1]}`
+  if (!smooth) return points.map((p, i) => `${i ? 'L' : 'M'} ${p[0]} ${p[1]}`).join(' ')
+
+  let d = `M ${points[0][0]} ${points[0][1]}`
+  for (let i = 1; i < points.length - 1; i++) {
+    const [x, y] = points[i]
+    const [nx, ny] = points[i + 1]
+    const mx = (x + nx) / 2
+    const my = (y + ny) / 2
+    d += ` Q ${x} ${y} ${mx} ${my}`
+  }
+  const last = points.at(-1)!
+  d += ` L ${last[0]} ${last[1]}`
+  return d
 }
 
 export function NodeLatencyChart({ node, backend }: Props) {
@@ -279,7 +251,6 @@ export function NodeLatencyChart({ node, backend }: Props) {
     [typeSeries, selectedKeys],
   )
   const latest = visibleSeries.map(series => series.latest).sort((a, b) => b.t - a.t)[0]
-  const option = useMemo(() => buildChartOption(visibleSeries, smooth), [visibleSeries, smooth])
 
   const toggleSeries = (key: string) => {
     setSelectedKeys(prev => (prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]))
@@ -351,14 +322,14 @@ export function NodeLatencyChart({ node, backend }: Props) {
           <div className="px-4 py-3 sm:px-5">
             <div className="h-80">
               {visibleSeries.length ? (
-                <ReactECharts option={option} notMerge={false} lazyUpdate style={{ height: '100%', width: '100%' }} />
+                <InteractiveLatencyChart series={visibleSeries} smooth={smooth} domainKey={`${node.uuid}-${selectedType}`} />
               ) : (
                 <div className="flex h-full items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                   请选择下方要显示的监控项目。
                 </div>
               )}
             </div>
-            <div className="mt-2 text-xs text-muted-foreground">支持最近 1 天数据；鼠标滚轮可缩放，按住左键可左右拖动查看。</div>
+            <div className="mt-2 text-xs text-muted-foreground">支持最近 1 天数据；鼠标滚轮缩放，按住左键左右拖动，悬停显示所有已选监控项延迟。</div>
           </div>
 
           <div className="border-t px-5 py-4">
@@ -422,6 +393,175 @@ export function NodeLatencyChart({ node, backend }: Props) {
           ) : (
             '暂无延迟记录；需要后端已有 ping / tcp_ping / http_ping 任务结果。'
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InteractiveLatencyChart({ series, smooth, domainKey }: { series: LatencySeries[]; smooth: boolean; domainKey: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const fullDomain = useMemo(() => fullDomainOf(series), [series])
+  const [domain, setDomain] = useState<[number, number]>(() => defaultDomainOf(series))
+  const [hover, setHover] = useState<{ x: number; t: number } | null>(null)
+  const [drag, setDrag] = useState<{ x: number; start: number; end: number } | null>(null)
+
+  useEffect(() => {
+    setDomain(defaultDomainOf(series))
+    setHover(null)
+    setDrag(null)
+  }, [domainKey, series])
+
+  const [domainStart, domainEnd] = clampDomain(domain[0], domain[1], fullDomain[0], fullDomain[1])
+  const visibleSamples = series.flatMap(item => item.samples.filter(sample => sample.t >= domainStart && sample.t <= domainEnd))
+  const rawMax = Math.max(...visibleSamples.map(sample => sample.value), 1)
+  const yMax = Math.max(10, Math.ceil(rawMax * 1.15))
+  const xScale = (t: number) => M.left + ((t - domainStart) / Math.max(domainEnd - domainStart, 1)) * PLOT_W
+  const yScale = (v: number) => M.top + (1 - v / yMax) * PLOT_H
+  const tFromClientX = (clientX: number) => {
+    const rect = wrapRef.current?.getBoundingClientRect()
+    if (!rect) return domainStart
+    const ratio = clamp((clientX - rect.left) / rect.width, 0, 1)
+    const svgX = ratio * CHART_W
+    const plotRatio = clamp((svgX - M.left) / PLOT_W, 0, 1)
+    return domainStart + plotRatio * (domainEnd - domainStart)
+  }
+  const svgXFromClientX = (clientX: number) => {
+    const rect = wrapRef.current?.getBoundingClientRect()
+    if (!rect) return M.left
+    return clamp(((clientX - rect.left) / rect.width) * CHART_W, M.left, CHART_W - M.right)
+  }
+
+  const paths = series.map(item => {
+    const inView = item.samples.filter(sample => sample.t >= domainStart && sample.t <= domainEnd)
+    const points = inView.map(sample => [xScale(sample.t), yScale(sample.value)] as [number, number])
+    return { ...item, path: makeLinePath(points, smooth) }
+  })
+
+  const hoverRows: HoverRow[] = hover
+    ? series
+        .map(item => {
+          const sample = findNearest(item.samples, hover.t)
+          if (!sample) return null
+          return {
+            key: item.key,
+            label: item.target || item.label,
+            color: item.color,
+            sample,
+            x: xScale(sample.t),
+            y: yScale(sample.value),
+          }
+        })
+        .filter(Boolean)
+        .sort((a, b) => (a as HoverRow).sample.value - (b as HoverRow).sample.value) as HoverRow[]
+    : []
+
+  const xTicks = Array.from({ length: 8 }, (_, i) => domainStart + ((domainEnd - domainStart) * i) / 7)
+  const yTicks = Array.from({ length: 5 }, (_, i) => (yMax * i) / 4)
+
+  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const fullWindow = Math.max(fullDomain[1] - fullDomain[0], MIN_WINDOW_MS)
+    const currentWindow = domainEnd - domainStart
+    const factor = event.deltaY > 0 ? 1.2 : 0.82
+    const nextWindow = clamp(currentWindow * factor, MIN_WINDOW_MS, fullWindow)
+    const center = tFromClientX(event.clientX)
+    const ratio = clamp((center - domainStart) / Math.max(currentWindow, 1), 0, 1)
+    const nextStart = center - nextWindow * ratio
+    const nextEnd = nextStart + nextWindow
+    setDomain(clampDomain(nextStart, nextEnd, fullDomain[0], fullDomain[1]))
+  }
+
+  const handleMouseDown = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    setDrag({ x: event.clientX, start: domainStart, end: domainEnd })
+  }
+
+  const handleMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+    if (drag) {
+      const rect = wrapRef.current?.getBoundingClientRect()
+      const width = rect?.width || 1
+      const dx = event.clientX - drag.x
+      const shift = -(dx / width) * (drag.end - drag.start)
+      setDomain(clampDomain(drag.start + shift, drag.end + shift, fullDomain[0], fullDomain[1]))
+      return
+    }
+    setHover({ x: svgXFromClientX(event.clientX), t: tFromClientX(event.clientX) })
+  }
+
+  const handleMouseUp = () => setDrag(null)
+  const handleMouseLeave = () => {
+    setDrag(null)
+    setHover(null)
+  }
+
+  return (
+    <div
+      ref={wrapRef}
+      className={cn('relative h-full w-full select-none touch-none', drag ? 'cursor-grabbing' : 'cursor-crosshair')}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+    >
+      <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} className="h-full w-full overflow-visible">
+        <rect x={M.left} y={M.top} width={PLOT_W} height={PLOT_H} fill="transparent" />
+        {yTicks.map(value => {
+          const y = yScale(value)
+          return (
+            <g key={value}>
+              <line x1={M.left} x2={CHART_W - M.right} y1={y} y2={y} stroke="rgba(100,116,139,0.12)" />
+              <text x={M.left - 10} y={y + 4} textAnchor="end" fontSize="12" fill="#64748b">
+                {Math.round(value)}
+              </text>
+            </g>
+          )
+        })}
+        <text x={10} y={M.top + PLOT_H / 2} transform={`rotate(-90 10 ${M.top + PLOT_H / 2})`} fontSize="12" fill="#64748b">
+          ms
+        </text>
+        {xTicks.map(t => {
+          const x = xScale(t)
+          return (
+            <g key={t}>
+              <line x1={x} x2={x} y1={M.top} y2={M.top + PLOT_H} stroke="rgba(100,116,139,0.08)" />
+              <text x={x} y={CHART_H - 10} textAnchor="middle" fontSize="12" fill="#64748b">
+                {formatTime(t)}
+              </text>
+            </g>
+          )
+        })}
+        {paths.map(item => item.path && (
+          <path key={item.key} d={item.path} fill="none" stroke={item.color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
+        {hover && (
+          <>
+            <line x1={hover.x} x2={hover.x} y1={M.top} y2={M.top + PLOT_H} stroke="rgba(15,23,42,0.25)" strokeDasharray="4 4" />
+            {hoverRows.map(row => (
+              <circle key={row.key} cx={row.x} cy={row.y} r="3.2" fill="white" stroke={row.color} strokeWidth="2" />
+            ))}
+          </>
+        )}
+      </svg>
+
+      {hoverRows.length > 0 && hover && (
+        <div
+          className="pointer-events-none absolute z-10 max-w-[22rem] rounded-lg border bg-popover/95 px-3 py-2 text-xs shadow-lg backdrop-blur"
+          style={{ left: `${clamp((hover.x / CHART_W) * 100, 4, 72)}%`, top: 12 }}
+        >
+          <div className="mb-1 font-medium">{new Date(hover.t).toLocaleString()}</div>
+          <div className="space-y-1">
+            {hoverRows.map(row => (
+              <div key={row.key} className="flex min-w-56 items-center justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: row.color }} />
+                  <span className="truncate">{row.label}</span>
+                </div>
+                <span className="font-mono">{latencyMs(row.sample.value)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
