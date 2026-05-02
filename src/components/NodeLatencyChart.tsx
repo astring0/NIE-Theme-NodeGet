@@ -1,19 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, AlertCircle, Check, Loader2 } from 'lucide-react'
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { useNodeLatency } from '../hooks/useNodeLatency'
+import type { EChartsOption } from 'echarts'
+import ReactECharts from 'echarts-for-react'
+import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import { Button } from './ui/button'
 import { cn } from '../utils/cn'
 import { latencyMs, relativeAge } from '../utils/format'
+import { useNodeLatency } from '../hooks/useNodeLatency'
 import type { BackendToken } from '../api/pool'
 import type { LatencySample, LatencyTaskType, Node } from '../types'
-
-const TOOLTIP_STYLE = {
-  background: 'hsl(var(--popover))',
-  border: '1px solid hsl(var(--border))',
-  borderRadius: 6,
-  fontSize: 11,
-}
 
 const TYPE_LABEL: Record<LatencyTaskType, string> = {
   ping: 'Ping',
@@ -35,6 +29,7 @@ const SERIES_COLORS = [
 ]
 
 const LOSS_THRESHOLD = 500
+const DEFAULT_WINDOW_MS = 3 * 60 * 60 * 1000
 
 interface Props {
   node: Node
@@ -49,11 +44,6 @@ interface LatencySeries {
   color: string
   samples: LatencySample[]
   latest: LatencySample
-}
-
-interface ChartRow {
-  t: number
-  [seriesKey: string]: number
 }
 
 function seriesKeyOf(sample: LatencySample) {
@@ -103,22 +93,6 @@ function buildSeries(samples: LatencySample[]): LatencySeries[] {
     }))
 }
 
-function buildChartData(seriesList: LatencySeries[], selectedKeys: string[]) {
-  const selectedSet = new Set(selectedKeys)
-  const rows = new Map<number, ChartRow>()
-
-  for (const series of seriesList) {
-    if (!selectedSet.has(series.key)) continue
-    for (const sample of series.samples) {
-      const row = rows.get(sample.t) ?? ({ t: sample.t } as ChartRow)
-      row[series.key] = sample.value
-      rows.set(sample.t, row)
-    }
-  }
-
-  return [...rows.values()].sort((a, b) => a.t - b.t)
-}
-
 function average(values: number[]) {
   if (!values.length) return null
   return values.reduce((sum, value) => sum + value, 0) / values.length
@@ -143,6 +117,121 @@ function preferredType(types: LatencyTaskType[]) {
   if (types.includes('tcp_ping')) return 'tcp_ping'
   if (types.includes('ping')) return 'ping'
   return types[0] ?? 'tcp_ping'
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function buildChartOption(visibleSeries: LatencySeries[], smooth: boolean): EChartsOption {
+  const allTimes = visibleSeries.flatMap(series => series.samples.map(sample => sample.t))
+  const minTs = allTimes.length ? Math.min(...allTimes) : Date.now()
+  const maxTs = allTimes.length ? Math.max(...allTimes) : Date.now()
+  const startValue = Math.max(minTs, maxTs - DEFAULT_WINDOW_MS)
+
+  return {
+    animation: false,
+    grid: { top: 20, right: 18, bottom: 56, left: 56 },
+    color: visibleSeries.map(series => series.color),
+    legend: { show: false },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'line' },
+      backgroundColor: 'rgba(255,255,255,0.96)',
+      borderColor: '#e5e7eb',
+      borderWidth: 1,
+      textStyle: { color: '#111827', fontSize: 12 },
+      extraCssText: 'box-shadow: 0 8px 28px rgba(0,0,0,0.10); border-radius: 8px;',
+      formatter: (params: any) => {
+        const list = Array.isArray(params) ? params : [params]
+        const first = list[0]
+        const timeValue = first?.axisValue ?? first?.value?.[0]
+        const header = new Date(Number(timeValue)).toLocaleString()
+        const rows = list
+          .filter((item: any) => Array.isArray(item.value) && Number.isFinite(item.value[1]))
+          .sort((a: any, b: any) => Number(a.value[1]) - Number(b.value[1]))
+          .map((item: any) => {
+            const color = item.color || '#3b82f6'
+            const name = escapeHtml(String(item.seriesName || ''))
+            const value = latencyMs(Number(item.value[1]))
+            return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:220px;">
+              <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                <span style="width:8px;height:8px;border-radius:999px;background:${color};display:inline-block;flex:none;"></span>
+                <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</span>
+              </div>
+              <span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${value}</span>
+            </div>`
+          })
+          .join('')
+        return `<div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-weight:600;">${escapeHtml(header)}</div>
+          ${rows || '<div>暂无数据</div>'}
+        </div>`
+      },
+    },
+    xAxis: {
+      type: 'time',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#64748b' },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      name: 'ms',
+      min: 0,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: 'rgba(100,116,139,0.10)' } },
+      nameTextStyle: { color: '#64748b', padding: [0, 0, 0, 4] },
+    },
+    dataZoom: [
+      {
+        type: 'inside',
+        xAxisIndex: 0,
+        startValue,
+        endValue: maxTs,
+        filterMode: 'none',
+        zoomOnMouseWheel: true,
+        moveOnMouseMove: true,
+        moveOnMouseWheel: false,
+        preventDefaultMouseMove: true,
+      },
+      {
+        type: 'slider',
+        xAxisIndex: 0,
+        height: 18,
+        bottom: 10,
+        brushSelect: false,
+        startValue,
+        endValue: maxTs,
+        filterMode: 'none',
+        borderColor: 'rgba(148,163,184,0.25)',
+        backgroundColor: 'rgba(148,163,184,0.10)',
+        fillerColor: 'rgba(59,130,246,0.12)',
+        moveHandleSize: 0,
+        handleSize: '100%',
+        handleStyle: { color: 'rgba(59,130,246,0.28)' },
+      },
+    ],
+    series: visibleSeries.map(series => ({
+      type: 'line',
+      name: series.target || series.label,
+      data: series.samples.map(sample => [sample.t, sample.value]),
+      showSymbol: false,
+      smooth,
+      lineStyle: { width: 2, color: series.color },
+      emphasis: { focus: 'series' },
+      connectNulls: true,
+      sampling: 'lttb',
+    })),
+  }
 }
 
 export function NodeLatencyChart({ node, backend }: Props) {
@@ -189,10 +278,8 @@ export function NodeLatencyChart({ node, backend }: Props) {
     () => typeSeries.filter(series => selectedKeys.includes(series.key)),
     [typeSeries, selectedKeys],
   )
-  const chartData = useMemo(() => buildChartData(typeSeries, selectedKeys), [typeSeries, selectedKeys])
-  const latest = visibleSeries
-    .map(series => series.latest)
-    .sort((a, b) => b.t - a.t)[0]
+  const latest = visibleSeries.map(series => series.latest).sort((a, b) => b.t - a.t)[0]
+  const option = useMemo(() => buildChartOption(visibleSeries, smooth), [visibleSeries, smooth])
 
   const toggleSeries = (key: string) => {
     setSelectedKeys(prev => (prev.includes(key) ? prev.filter(item => item !== key) : [...prev, key]))
@@ -247,7 +334,7 @@ export function NodeLatencyChart({ node, backend }: Props) {
           >
             清空
           </Button>
-          <div className="min-w-[6rem] text-right">
+          <div className="min-w-[7rem] text-right">
             <div className="text-3xl font-semibold font-mono leading-none">{latest ? latencyMs(latest.value) : '—'}</div>
             <div className="mt-1 text-xs text-muted-foreground">{latest ? relativeAge(latest.t) : loading ? '读取中…' : '暂无数据'}</div>
           </div>
@@ -262,53 +349,16 @@ export function NodeLatencyChart({ node, backend }: Props) {
       ) : typeSeries.length ? (
         <>
           <div className="px-4 py-3 sm:px-5">
-            <div className="h-72">
+            <div className="h-80">
               {visibleSeries.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-                    <XAxis
-                      dataKey="t"
-                      minTickGap={26}
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      tickFormatter={t => new Date(Number(t)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    />
-                    <YAxis
-                      width={46}
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                      tickFormatter={v => `${Math.round(Number(v))}`}
-                      domain={[0, 'auto']}
-                      label={{ value: 'ms', angle: -90, position: 'insideLeft', style: { fill: 'hsl(var(--muted-foreground))', fontSize: 11 } }}
-                    />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      labelFormatter={t => new Date(Number(t)).toLocaleString()}
-                      formatter={(v, name) => [latencyMs(Number(v)), String(name)]}
-                    />
-                    {visibleSeries.map(series => (
-                      <Line
-                        key={series.key}
-                        type={smooth ? 'monotone' : 'linear'}
-                        dataKey={series.key}
-                        name={series.target || series.label}
-                        stroke={series.color}
-                        strokeWidth={2}
-                        dot={false}
-                        connectNulls
-                        isAnimationActive={false}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
+                <ReactECharts option={option} notMerge={false} lazyUpdate style={{ height: '100%', width: '100%' }} />
               ) : (
                 <div className="flex h-full items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                   请选择下方要显示的监控项目。
                 </div>
               )}
             </div>
+            <div className="mt-2 text-xs text-muted-foreground">支持最近 1 天数据；鼠标滚轮可缩放，按住左键可左右拖动查看。</div>
           </div>
 
           <div className="border-t px-5 py-4">
