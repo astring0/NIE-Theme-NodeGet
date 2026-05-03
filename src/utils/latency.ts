@@ -11,10 +11,7 @@ const COLORS = [
   '#14b8a6',
 ]
 
-const VALUE_KEYS = [
-  'tcp_ping',
-  'tcpPing',
-  'ping',
+const FALLBACK_VALUE_KEYS = [
   'latency',
   'delay',
   'rtt',
@@ -36,43 +33,6 @@ export function normalizeTs(ts: number) {
   return ts < 1_000_000_000_000 ? ts * 1000 : ts
 }
 
-function asText(v: unknown) {
-  if (v == null) return ''
-  if (typeof v === 'string') return v
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
-  try {
-    return JSON.stringify(v)
-  } catch {
-    return ''
-  }
-}
-
-function eventTypeText(row: TaskQueryResult) {
-  const eventType = row.task_event_type
-  const parts = [
-    row.cron_source,
-    (row as unknown as { type?: unknown }).type,
-    asText(eventType),
-  ]
-  if (eventType && typeof eventType === 'object' && !Array.isArray(eventType)) {
-    parts.push(...Object.keys(eventType))
-    parts.push(...Object.values(eventType as Record<string, unknown>).map(asText))
-  }
-  return parts.filter(Boolean).join(' ').toLowerCase()
-}
-
-export function detectLatencyType(row: TaskQueryResult): LatencyType | null {
-  const hay = eventTypeText(row)
-  if (/tcp[-_\s]?ping|tcping|tcp_ping/.test(hay)) return 'tcp_ping'
-  if (/(^|[^a-z])ping([^a-z]|$)/.test(hay)) return 'ping'
-
-  const resultText = asText(row.task_event_result).toLowerCase()
-  if (/tcp[-_\s]?ping|tcping|tcp_ping/.test(resultText)) return 'tcp_ping'
-  if (/(^|[^a-z])ping([^a-z]|$)/.test(resultText)) return 'ping'
-
-  return null
-}
-
 function numberFromString(s: string) {
   const match = s.match(/-?\d+(?:\.\d+)?/)
   if (!match) return null
@@ -80,75 +40,53 @@ function numberFromString(s: string) {
   return Number.isFinite(n) ? n : null
 }
 
-function readNumber(value: unknown, preferredType?: LatencyType, depth = 0): number | null {
+function readNumber(value: unknown, depth = 0): number | null {
   if (depth > 5 || value == null) return null
-
   if (typeof value === 'number') return Number.isFinite(value) ? value : null
   if (typeof value === 'string') return numberFromString(value)
   if (typeof value !== 'object') return null
 
   if (Array.isArray(value)) {
     for (let i = value.length - 1; i >= 0; i--) {
-      const v = readNumber(value[i], preferredType, depth + 1)
+      const v = readNumber(value[i], depth + 1)
       if (v != null) return v
     }
     return null
   }
 
   const obj = value as Record<string, unknown>
-  const preferredKeys = preferredType
-    ? preferredType === 'tcp_ping'
-      ? ['tcp_ping', 'tcpPing', 'tcping', 'tcp-ping', 'result', 'latency', 'delay', 'rtt', 'ms', 'value']
-      : ['ping', 'result', 'latency', 'delay', 'rtt', 'ms', 'value']
-    : VALUE_KEYS
-
-  for (const k of preferredKeys) {
-    if (k in obj) {
-      const v = readNumber(obj[k], preferredType, depth + 1)
+  for (const key of FALLBACK_VALUE_KEYS) {
+    if (key in obj) {
+      const v = readNumber(obj[key], depth + 1)
       if (v != null) return v
     }
   }
-
   for (const v of Object.values(obj)) {
-    const n = readNumber(v, preferredType, depth + 1)
+    const n = readNumber(v, depth + 1)
     if (n != null) return n
   }
-
   return null
 }
 
 export function extractLatencyValue(row: TaskQueryResult, type: LatencyType): number | null {
-  if (row.success === false) return null
-  return readNumber(row.task_event_result, type)
-}
+  if (!row.success) return null
+  const result = row.task_event_result
+  if (!result) return null
 
-export function isLatencyRow(row: TaskQueryResult, type?: LatencyType, assumeType = false) {
-  const detected = detectLatencyType(row)
-  if (type) {
-    if (detected === type) return true
-    return assumeType && extractLatencyValue(row, type) != null
-  }
-  return detected != null || readNumber(row.task_event_result) != null
+  const direct = result[type]
+  if (typeof direct === 'number') return Number.isFinite(direct) ? direct : null
+
+  // 原版只认 task_event_result[type]，这里保留这个优先级；
+  // 只在不同后端/插件返回嵌套对象时再做兜底读取。
+  const directNested = readNumber(direct)
+  if (directNested != null) return directNested
+
+  return readNumber(result)
 }
 
 export function latencySeriesName(row: TaskQueryResult, type?: LatencyType) {
-  const eventType = row.task_event_type
-  let name = row.cron_source || ''
-
-  if (!name && eventType && typeof eventType === 'object' && !Array.isArray(eventType)) {
-    const values = Object.values(eventType as Record<string, unknown>).map(asText).filter(Boolean)
-    const keys = Object.keys(eventType as Record<string, unknown>)
-    name = values.find(v => !/^(ping|tcp_ping|tcping|tcp-ping)$/i.test(v)) || keys.join(' / ')
-  }
-
-  if (!name) name = type === 'tcp_ping' ? 'TCP Ping' : type === 'ping' ? 'Ping' : '未知'
-
-  return name
-    .replace(/^task[-_:\s]*/i, '')
-    .replace(/^tcp[-_\s]?ping[-_:：\s]*/i, '')
-    .replace(/^tcping[-_:：\s]*/i, '')
-    .replace(/^ping[-_:：\s]*/i, '')
-    .trim() || name
+  const name = row.cron_source || (type === 'tcp_ping' ? 'TCP Ping' : type === 'ping' ? 'Ping' : '未知')
+  return name.trim() || '未知'
 }
 
 function seriesNames(rows: TaskQueryResult[], type: LatencyType) {

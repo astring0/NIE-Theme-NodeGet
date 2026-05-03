@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
 import { taskQuery } from '../api/methods'
-import { detectLatencyType, extractLatencyValue, isLatencyRow, normalizeTs } from '../utils/latency'
+import { normalizeTs } from '../utils/latency'
 import type { RpcClient } from '../api/client'
 import type { BackendPool } from '../api/pool'
-import type { LatencyType, TaskQueryCondition, TaskQueryResult } from '../types'
+import type { LatencyType, TaskQueryResult } from '../types'
 
 const WINDOW_MS = 60 * 60 * 1000
 const REFRESH_MS = 10_000
 const QUERY_TIMEOUT_MS = 20_000
-const QUERY_LIMIT = 1200
 
 export interface LatencyQueryState {
   pingData: TaskQueryResult[]
@@ -17,90 +16,31 @@ export interface LatencyQueryState {
   error: string | null
 }
 
-function rowKey(row: TaskQueryResult) {
-  return [
-    row.task_id ?? '',
-    row.uuid ?? '',
-    row.timestamp ?? '',
-    row.cron_source ?? '',
-    JSON.stringify(row.task_event_type ?? ''),
-    JSON.stringify(row.task_event_result ?? ''),
-  ].join('|')
+function clean(rows: TaskQueryResult[] | undefined): TaskQueryResult[] {
+  return (rows ?? [])
+    .filter(r => r.cron_source && r.cron_source !== '未知')
+    .sort((a, b) => normalizeTs(a.timestamp) - normalizeTs(b.timestamp))
 }
 
-function dedupe(rows: TaskQueryResult[]) {
-  const seen = new Set<string>()
-  const out: TaskQueryResult[] = []
-  for (const row of rows) {
-    const key = rowKey(row)
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(row)
-  }
-  return out.sort((a, b) => normalizeTs(a.timestamp) - normalizeTs(b.timestamp))
-}
-
-function filterRows(rows: TaskQueryResult[], type: LatencyType, assumeType = false) {
-  return dedupe(
-    (rows ?? []).filter(row => {
-      if (!row || !row.timestamp) return false
-      if (!isLatencyRow(row, type, assumeType)) return false
-      const detected = detectLatencyType(row)
-      if (detected === type) return true
-      if (assumeType && extractLatencyValue(row, type) != null) return true
-      return false
-    }),
-  )
-}
-
-function conditionVariants(uuid: string, window: [number, number], type: LatencyType): { cond: TaskQueryCondition[]; assume: boolean }[] {
-  return [
-    {
-      cond: [{ uuid, timestamp_from_to: window, type, limit: QUERY_LIMIT }],
-      assume: true,
-    },
-    {
-      cond: [{ uuid, timestamp_from: window[0], timestamp_to: window[1], type, limit: QUERY_LIMIT }],
-      assume: true,
-    },
-    {
-      cond: [{ uuid, timestamp_from_to: window, limit: QUERY_LIMIT }],
-      assume: false,
-    },
-    {
-      cond: [{ uuid, timestamp_from: window[0], timestamp_to: window[1], limit: QUERY_LIMIT }],
-      assume: false,
-    },
-    {
-      cond: [{ uuid }, { timestamp_from_to: window }, { type }, { limit: QUERY_LIMIT }],
-      assume: true,
-    },
-  ]
-}
-
-export async function fetchLatencyRows(client: RpcClient, uuid: string, type: LatencyType, timeoutMs = QUERY_TIMEOUT_MS) {
+export async function fetchLatencyRows(
+  client: RpcClient,
+  uuid: string,
+  type: LatencyType,
+  timeoutMs = QUERY_TIMEOUT_MS,
+) {
   const now = Date.now()
   const window: [number, number] = [now - WINDOW_MS, now]
-  const errors: string[] = []
-  const collected: TaskQueryResult[] = []
 
-  for (const { cond, assume } of conditionVariants(uuid, window, type)) {
-    try {
-      const rows = await taskQuery(client, cond, timeoutMs)
-      const matched = filterRows(rows, type, assume)
-      collected.push(...matched)
-      if (matched.length > 0) break
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  const result = dedupe(collected)
-  if (!result.length && errors.length) {
-    throw new Error(errors[0])
-  }
-
-  return result
+  // 这里刻意保持和原版 StatusShow 一样的 task_query 参数格式。
+  // 部分 NodeGet 后端版本不支持把 uuid / timestamp / type / limit 合并进同一个 condition 对象，
+  // 也不支持 limit 条件；一旦加了这些，接口会返回空或报错，导致延迟图表完全不显示。
+  return clean(
+    await taskQuery(
+      client,
+      [{ uuid }, { timestamp_from_to: window }, { type }],
+      timeoutMs,
+    ),
+  )
 }
 
 export function useNodeLatency(
