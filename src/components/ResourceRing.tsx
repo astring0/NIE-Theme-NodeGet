@@ -35,6 +35,7 @@ export function ResourceRing({
   const color = metricColor(value)
   const glow = metricGlow(value)
   const viewBox = '0 0 100 100'
+  const innerInsetPercent = Math.min(22, Math.max(14, strokeWidth + 4))
   const style = {
     width: size,
     height: size,
@@ -44,7 +45,7 @@ export function ResourceRing({
   return (
     <div className="min-w-0 text-center" title={subTitle || sub || undefined}>
       <div className="resource-ring relative mx-auto" style={style} aria-label={`${label} ${pct(value)}`}>
-        <svg viewBox={viewBox} className="h-full w-full -rotate-90 overflow-visible">
+        <svg viewBox={viewBox} className="relative z-[1] h-full w-full -rotate-90 overflow-visible">
           <circle
             cx="50"
             cy="50"
@@ -52,7 +53,7 @@ export function ResourceRing({
             fill="none"
             strokeWidth={strokeWidth}
             stroke="hsl(var(--border))"
-            opacity={0.9}
+            opacity={0.95}
           />
           <circle
             cx="50"
@@ -67,10 +68,21 @@ export function ResourceRing({
             style={{ transition: `stroke-dashoffset ${duration}ms cubic-bezier(0.65, 0, 0.35, 1)` }}
           />
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-card ring-1 ring-border/55" />
-        <div className="absolute inset-0 rounded-full shadow-[0_0_0_1px_hsl(var(--border)/0.55)]" />
-        <div className="absolute inset-0 rounded-full shadow-[0_0_18px_var(--metric-glow)]" />
-        <div className="relative z-[1] flex h-full flex-col items-center justify-center leading-none">
+
+        <div
+          className="absolute rounded-full bg-card"
+          style={{
+            inset: `${innerInsetPercent}%`,
+            boxShadow: '0 0 0 1px hsl(var(--border) / 0.55)',
+          }}
+        />
+
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{ boxShadow: '0 0 18px var(--metric-glow)' }}
+        />
+
+        <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center leading-none">
           <span className={centerClassName}>{Number.isFinite(value) ? pct(animated) : '—'}</span>
           <span className={labelClassName}>{label}</span>
         </div>
