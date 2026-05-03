@@ -48,6 +48,7 @@ export default {
       },
       fontFamily: {
         sans: [
+          'Nunito',
           '-apple-system',
           'BlinkMacSystemFont',
           'Segoe UI',

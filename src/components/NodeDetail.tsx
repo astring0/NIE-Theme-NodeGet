@@ -13,12 +13,14 @@ import {
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
+import { OnlineStatusBar } from './OnlineStatusBar'
+import { ResourceRing } from './ResourceRing'
 import { Flag } from './Flag'
 import { StatusDot } from './StatusDot'
 import { bytes, pct, relativeAge, uptime } from '../utils/format'
 import { deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
 import { cycleProgress, hasCost, remainingDays, remainingValue } from '../utils/cost'
-import { cn, strokeColor } from '../utils/cn'
+import { cn } from '../utils/cn'
 import {
   buildLatencyChart,
   computeLatencyStats,
@@ -73,7 +75,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     return () => el.removeEventListener('scroll', onScroll)
   }, [node])
 
-  const { pingData, tcpData, loading: latencyLoading } = useNodeLatency(
+  const { pingData, tcpData, loading: latencyLoading, error: latencyError } = useNodeLatency(
     pool,
     node?.source ?? null,
     node?.uuid ?? null,
@@ -95,6 +97,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
       ? `${d.load_one.toFixed(2)} / ${d.load_five.toFixed(2)} / ${d.load_fifteen.toFixed(2)}`
       : null
   const history = node.history || []
+  const trendHistory = history.slice(-120)
 
   return (
     <div
@@ -141,33 +144,59 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
         <Section title="资源">
-          <div className="flex flex-wrap justify-around gap-4 sm:gap-6">
-            <Ring label="CPU" value={u.cpu} sub={loadAvg ?? undefined} />
-            <Ring
+          <div className="flex flex-wrap justify-around gap-5 sm:gap-8">
+            <ResourceRing label="CPU" value={u.cpu} sub={loadAvg ?? undefined} size={116} strokeWidth={10} centerClassName="text-[17px] font-black text-foreground" labelClassName="mt-2 text-base font-semibold text-foreground" subClassName="mt-3 truncate text-sm font-mono text-muted-foreground" />
+            <ResourceRing
               label="内存"
               value={u.mem}
               sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : undefined}
+              size={116}
+              strokeWidth={10}
+              centerClassName="text-[17px] font-black text-foreground"
+              labelClassName="mt-2 text-base font-semibold text-foreground"
+              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
             />
-            <Ring
+            <ResourceRing
               label="磁盘"
               value={u.disk}
               sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : undefined}
+              size={116}
+              strokeWidth={10}
+              centerClassName="text-[17px] font-black text-foreground"
+              labelClassName="mt-2 text-base font-semibold text-foreground"
+              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
             />
             {swap != null && (
-              <Ring
+              <ResourceRing
                 label="Swap"
                 value={swap}
                 sub={`${bytes(d?.used_swap)} / ${bytes(d?.total_swap)}`}
+                size={116}
+                strokeWidth={10}
+                centerClassName="text-[17px] font-black text-foreground"
+                labelClassName="mt-2 text-base font-semibold text-foreground"
+                subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
               />
             )}
           </div>
         </Section>
 
-        {history.length > 1 && (
-          <Section title={`近 ${history.length * 2} 秒趋势`}>
+        <Section title="在线状态">
+          <OnlineStatusBar
+            history={history}
+            online={node.online}
+            intervalMinutes={3}
+            slots={80}
+            title="在线状态"
+            subtitle="每格 3 分钟，共 80 格"
+          />
+        </Section>
+
+        {trendHistory.length > 1 && (
+          <Section title="近 240 秒趋势">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="cpu"
                 label="CPU %"
                 stroke="#3b82f6"
@@ -175,7 +204,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
                 format={pct}
               />
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="mem"
                 label="内存 %"
                 stroke="#10b981"
@@ -183,14 +212,14 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
                 format={pct}
               />
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="netIn"
                 label="下行"
                 stroke="#8b5cf6"
                 format={v => `${bytes(v)}/s`}
               />
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="netOut"
                 label="上行"
                 stroke="#f59e0b"
@@ -205,8 +234,9 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
           rows={tcpData}
           type="tcp_ping"
           loading={latencyLoading}
+          error={latencyError}
         />
-        <LatencyBlock title="Ping" rows={pingData} type="ping" loading={latencyLoading} />
+        <LatencyBlock title="Ping" rows={pingData} type="ping" loading={latencyLoading} error={latencyError} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <Section title="系统">
@@ -272,47 +302,6 @@ function KV({ k, v }: { k: string; v: ReactNode }) {
   )
 }
 
-function Ring({ label, value, sub }: { label: string; value?: number; sub?: string }) {
-  const r = 40
-  const c = 2 * Math.PI * r
-  const v = Math.max(0, Math.min(100, value ?? 0))
-  const hasValue = Number.isFinite(value)
-
-  return (
-    <div className="flex flex-col items-center gap-2 min-w-0">
-      <div className="relative w-24 h-24 sm:w-28 sm:h-28">
-        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-          <circle
-            cx="50" cy="50" r={r}
-            fill="none" strokeWidth={8}
-            className="stroke-secondary"
-          />
-          {hasValue && (
-            <circle
-              cx="50" cy="50" r={r}
-              fill="none" strokeWidth={8}
-              className={strokeColor(value)}
-              strokeDasharray={c}
-              strokeDashoffset={c - (c * v) / 100}
-              strokeLinecap="round"
-              style={{ transition: 'stroke-dashoffset 400ms ease' }}
-            />
-          )}
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-base sm:text-lg font-semibold">
-          {pct(value)}
-        </div>
-      </div>
-      <div className="text-sm font-medium">{label}</div>
-      {sub && (
-        <div className="text-xs font-mono text-muted-foreground truncate max-w-full" title={sub}>
-          {sub}
-        </div>
-      )}
-    </div>
-  )
-}
-
 interface SparkProps {
   data: HistorySample[]
   dataKey: keyof HistorySample
@@ -367,11 +356,12 @@ interface LatencyBlockProps {
   rows: TaskQueryResult[]
   type: LatencyType
   loading: boolean
+  error?: string | null
 }
 
 const ms = (v: number) => `${v.toFixed(1)} ms`
 
-function LatencyBlock({ title, rows, type, loading }: LatencyBlockProps) {
+function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) {
   const { data, series } = useMemo(() => buildLatencyChart(rows, type), [rows, type])
   const stats = useMemo(() => computeLatencyStats(rows, type), [rows, type])
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
@@ -391,8 +381,8 @@ function LatencyBlock({ title, rows, type, loading }: LatencyBlockProps) {
     <Section title={`${title} · 近 1 小时`}>
       <div className="relative h-60">
         {empty && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-            {loading ? '加载中…' : `暂无 ${type} 数据`}
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-muted-foreground">
+            {loading ? '加载中…' : error ? `Task 查询失败：${error}` : `暂无 ${type} 数据`}
           </div>
         )}
         {!empty && (
