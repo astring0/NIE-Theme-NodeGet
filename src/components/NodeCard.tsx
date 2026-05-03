@@ -23,7 +23,7 @@ export function NodeCard({ node }: { node: Node }) {
     <a href={`#${encodeURIComponent(node.uuid)}`} className="block h-full">
       <Card
         className={cn(
-          'group h-full min-h-[448px] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-[0_14px_34px_rgba(66,185,131,0.10)] flex flex-col gap-3.5',
+          'group h-full min-h-[432px] sm:min-h-[468px] p-4 sm:p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-[0_14px_34px_rgba(66,185,131,0.10)] flex flex-col gap-3 sm:gap-3.5',
           !node.online && 'opacity-75',
         )}
       >
@@ -32,7 +32,7 @@ export function NodeCard({ node }: { node: Node }) {
           {logo && (
             <img src={logo} alt="" className="h-6 w-6 shrink-0 rounded-full object-contain" loading="lazy" />
           )}
-          <span className="min-w-0 flex-1 truncate text-[15px] font-black tracking-wide text-foreground" title={displayName(node)}>
+          <span className="min-w-0 flex-1 truncate text-[14px] sm:text-[15px] font-black tracking-wide text-foreground" title={displayName(node)}>
             {displayName(node)}
           </span>
           <Flag code={node.meta?.region} className="shrink-0" />
@@ -44,25 +44,25 @@ export function NodeCard({ node }: { node: Node }) {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 py-1">
-          <ResourceRing label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} size={74} strokeWidth={9} />
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 py-1">
+          <ResourceRing label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} size={72} strokeWidth={9} />
           <ResourceRing
             label="内存"
             value={u.mem}
             sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : null}
-            size={74}
+            size={72}
             strokeWidth={9}
           />
           <ResourceRing
             label="磁盘"
             value={u.disk}
             sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : null}
-            size={74}
+            size={72}
             strokeWidth={9}
           />
         </div>
 
-        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={80} intervalMinutes={3} />
+        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={3} />
 
         <div className="mt-auto space-y-1.5 border-t border-dashed border-border pt-3 font-mono text-xs text-muted-foreground">
           <div className="flex items-center gap-3">

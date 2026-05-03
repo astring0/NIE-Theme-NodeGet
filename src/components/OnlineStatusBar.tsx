@@ -43,7 +43,7 @@ export function OnlineStatusBar({
   return (
     <div
       className={cn(
-        'rounded-[22px] border border-dashed border-border bg-secondary/35',
+        'rounded-[22px] border border-dashed border-border bg-secondary/40',
         compact ? 'px-3 py-2.5' : 'px-5 py-4',
       )}
     >
@@ -71,7 +71,7 @@ export function OnlineStatusBar({
             key={index}
             className={cn(
               'block flex-1 cursor-default transition-all duration-200',
-              compact ? 'h-6' : 'h-8',
+              compact ? 'h-7 sm:h-7' : 'h-8 sm:h-8',
               slot.active
                 ? 'bg-primary shadow-[0_0_0_1px_rgba(66,185,131,0.09)]'
                 : 'bg-border/90',
@@ -101,17 +101,17 @@ function StatusTooltip({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute bottom-full z-20 mb-2 -translate-x-1/2 rounded-md border border-border bg-card/98 px-2.5 py-2 shadow-[0_12px_24px_rgba(15,23,42,0.10)]',
-        compact ? 'w-[154px] text-[10px]' : 'w-[176px] text-[11px]',
+        'pointer-events-none absolute bottom-full z-20 mb-3 -translate-x-1/2 rounded-xl border border-[hsl(var(--border))] bg-card px-3 py-2.5 text-left shadow-[0_18px_40px_rgba(15,23,42,0.16)] ring-1 ring-black/5',
+        compact ? 'w-[168px] text-[10px]' : 'w-[188px] text-[11px]',
       )}
-      style={{ left }}
+      style={{ left, backdropFilter: 'none', opacity: 1 }}
     >
       <div className="font-mono text-muted-foreground">{timeLabel}</div>
       <div className={cn('mt-0.5 flex items-center gap-1 font-semibold', slot.active ? 'text-primary' : 'text-rose-500')}>
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
         {slot.active ? '在线' : '离线'}
       </div>
-      <div className="mt-1 space-y-0.5 text-foreground/85">
+      <div className="mt-1.5 space-y-0.5 text-foreground">
         <div>CPU {pct(s?.cpu)}</div>
         <div>内存 {pct(s?.mem)}</div>
         <div>磁盘 {pct(s?.disk)}</div>

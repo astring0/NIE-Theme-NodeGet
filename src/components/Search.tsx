@@ -12,7 +12,7 @@ interface Props {
 
 export const Search = forwardRef<HTMLInputElement, Props>(
   ({ value, onChange, className, autoFocus }, ref) => (
-    <div className={cn('relative w-44 md:w-56', className)}>
+    <div className={cn('relative w-40 md:w-56', className)}>
       <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={ref}
