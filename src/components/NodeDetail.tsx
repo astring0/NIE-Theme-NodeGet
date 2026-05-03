@@ -13,12 +13,14 @@ import {
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
+import { OnlineStatusBar } from './OnlineStatusBar'
+import { ResourceRing } from './ResourceRing'
 import { Flag } from './Flag'
 import { StatusDot } from './StatusDot'
 import { bytes, pct, relativeAge, uptime } from '../utils/format'
 import { deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
 import { cycleProgress, hasCost, remainingDays, remainingValue } from '../utils/cost'
-import { cn, strokeColor } from '../utils/cn'
+import { cn } from '../utils/cn'
 import {
   buildLatencyChart,
   computeLatencyStats,
@@ -141,26 +143,52 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
         <Section title="资源">
-          <div className="flex flex-wrap justify-around gap-4 sm:gap-6">
-            <Ring label="CPU" value={u.cpu} sub={loadAvg ?? undefined} />
-            <Ring
+          <div className="flex flex-wrap justify-around gap-5 sm:gap-8">
+            <ResourceRing label="CPU" value={u.cpu} sub={loadAvg ?? undefined} size={116} strokeWidth={10} centerClassName="text-[17px] font-black text-foreground" labelClassName="mt-2 text-base font-semibold text-foreground" subClassName="mt-3 truncate text-sm font-mono text-muted-foreground" />
+            <ResourceRing
               label="内存"
               value={u.mem}
               sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : undefined}
+              size={116}
+              strokeWidth={10}
+              centerClassName="text-[17px] font-black text-foreground"
+              labelClassName="mt-2 text-base font-semibold text-foreground"
+              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
             />
-            <Ring
+            <ResourceRing
               label="磁盘"
               value={u.disk}
               sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : undefined}
+              size={116}
+              strokeWidth={10}
+              centerClassName="text-[17px] font-black text-foreground"
+              labelClassName="mt-2 text-base font-semibold text-foreground"
+              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
             />
             {swap != null && (
-              <Ring
+              <ResourceRing
                 label="Swap"
                 value={swap}
                 sub={`${bytes(d?.used_swap)} / ${bytes(d?.total_swap)}`}
+                size={116}
+                strokeWidth={10}
+                centerClassName="text-[17px] font-black text-foreground"
+                labelClassName="mt-2 text-base font-semibold text-foreground"
+                subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
               />
             )}
           </div>
+        </Section>
+
+        <Section title="在线状态">
+          <OnlineStatusBar
+            history={history}
+            online={node.online}
+            intervalMinutes={3}
+            slots={48}
+            title="在线状态"
+            subtitle="每格 3 分钟"
+          />
         </Section>
 
         {history.length > 1 && (
@@ -268,47 +296,6 @@ function KV({ k, v }: { k: string; v: ReactNode }) {
     <div className="flex justify-between gap-3 text-sm py-1">
       <span className="text-muted-foreground">{k}</span>
       <span className="font-mono text-right truncate">{v}</span>
-    </div>
-  )
-}
-
-function Ring({ label, value, sub }: { label: string; value?: number; sub?: string }) {
-  const r = 40
-  const c = 2 * Math.PI * r
-  const v = Math.max(0, Math.min(100, value ?? 0))
-  const hasValue = Number.isFinite(value)
-
-  return (
-    <div className="flex flex-col items-center gap-2 min-w-0">
-      <div className="relative w-24 h-24 sm:w-28 sm:h-28">
-        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-          <circle
-            cx="50" cy="50" r={r}
-            fill="none" strokeWidth={8}
-            className="stroke-secondary"
-          />
-          {hasValue && (
-            <circle
-              cx="50" cy="50" r={r}
-              fill="none" strokeWidth={8}
-              className={strokeColor(value)}
-              strokeDasharray={c}
-              strokeDashoffset={c - (c * v) / 100}
-              strokeLinecap="round"
-              style={{ transition: 'stroke-dashoffset 400ms ease' }}
-            />
-          )}
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center text-base sm:text-lg font-semibold">
-          {pct(value)}
-        </div>
-      </div>
-      <div className="text-sm font-medium">{label}</div>
-      {sub && (
-        <div className="text-xs font-mono text-muted-foreground truncate max-w-full" title={sub}>
-          {sub}
-        </div>
-      )}
     </div>
   )
 }

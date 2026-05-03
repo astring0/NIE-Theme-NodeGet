@@ -4,47 +4,47 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 204 15% 37%;
+    --background: 210 25% 97%;
+    --foreground: 214 24% 37%;
     --card: 0 0% 100%;
-    --card-foreground: 204 15% 37%;
+    --card-foreground: 214 24% 37%;
     --popover: 0 0% 100%;
-    --popover-foreground: 204 15% 37%;
+    --popover-foreground: 214 24% 37%;
     --primary: 153 47% 49%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 98%;
-    --secondary-foreground: 204 15% 37%;
-    --muted: 210 40% 98%;
-    --muted-foreground: 211 13% 65%;
-    --accent: 210 40% 98%;
+    --secondary: 210 45% 96%;
+    --secondary-foreground: 214 24% 37%;
+    --muted: 210 45% 96%;
+    --muted-foreground: 216 14% 63%;
+    --accent: 210 45% 96%;
     --accent-foreground: 153 47% 49%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 210 23% 95%;
-    --input: 210 23% 95%;
+    --border: 214 26% 88%;
+    --input: 214 26% 90%;
     --ring: 153 47% 49%;
     --radius: 0.9rem;
   }
 
   .dark {
-    --background: 220 26% 14%;
+    --background: 220 24% 13%;
     --foreground: 210 40% 91%;
-    --card: 220 26% 14%;
+    --card: 220 22% 16%;
     --card-foreground: 210 40% 91%;
-    --popover: 220 26% 14%;
+    --popover: 220 22% 16%;
     --popover-foreground: 210 40% 91%;
     --primary: 142 51% 62%;
     --primary-foreground: 220 26% 14%;
-    --secondary: 218 23% 23%;
+    --secondary: 218 21% 21%;
     --secondary-foreground: 210 40% 91%;
-    --muted: 218 23% 23%;
+    --muted: 218 21% 21%;
     --muted-foreground: 214 20% 63%;
-    --accent: 218 23% 23%;
+    --accent: 218 21% 21%;
     --accent-foreground: 142 51% 62%;
     --destructive: 0 63% 44%;
     --destructive-foreground: 0 0% 98%;
-    --border: 218 23% 23%;
-    --input: 218 23% 23%;
+    --border: 218 17% 28%;
+    --input: 218 17% 28%;
     --ring: 142 51% 62%;
   }
 
@@ -63,7 +63,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
-    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+      color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   a {
@@ -95,37 +97,42 @@
 .bg-soft {
   background-color: hsl(var(--background));
   background-image:
-    linear-gradient(hsl(var(--muted-foreground) / 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--muted-foreground) / 0.055) 1px, transparent 1px);
+    linear-gradient(hsl(var(--muted-foreground) / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--muted-foreground) / 0.045) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 .dark .bg-soft {
   background-color: hsl(var(--background));
   background-image:
-    linear-gradient(hsl(var(--muted-foreground) / 0.065) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(var(--muted-foreground) / 0.065) 1px, transparent 1px);
+    linear-gradient(hsl(var(--muted-foreground) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--muted-foreground) / 0.06) 1px, transparent 1px);
 }
 
 .card-soft {
-  background: hsl(var(--card) / 0.98);
+  background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--card) / 0.98) 100%);
   border-style: dashed;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.03), 0 0 2px rgba(0, 0, 0, 0.02);
-  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.2s ease, box-shadow 0.2s ease;
+  border-color: hsl(var(--border));
+  box-shadow:
+    0 14px 34px rgba(15, 23, 42, 0.05),
+    0 2px 6px rgba(15, 23, 42, 0.03),
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+  transition:
+    background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .dark .card-soft {
-  background: hsl(var(--card) / 0.96);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35), 0 0 2px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--card) / 0.97) 100%);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.34),
+    0 2px 6px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset;
 }
 
-.nodeget-ring {
-  background: conic-gradient(var(--ring-color) var(--ring-value), hsl(var(--border) / 0.9) 0deg);
-}
-
-.dark .nodeget-ring {
-  background: conic-gradient(var(--ring-color) var(--ring-value), hsl(var(--border) / 0.95) 0deg);
+.resource-ring {
+  isolation: isolate;
 }
