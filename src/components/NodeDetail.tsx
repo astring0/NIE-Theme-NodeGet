@@ -97,6 +97,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
       ? `${d.load_one.toFixed(2)} / ${d.load_five.toFixed(2)} / ${d.load_fifteen.toFixed(2)}`
       : null
   const history = node.history || []
+  const trendHistory = history.slice(-120)
 
   return (
     <div
@@ -185,17 +186,17 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
             history={history}
             online={node.online}
             intervalMinutes={3}
-            slots={48}
+            slots={80}
             title="在线状态"
-            subtitle="每格 3 分钟"
+            subtitle="每格 3 分钟，共 80 格"
           />
         </Section>
 
-        {history.length > 1 && (
-          <Section title={`近 ${history.length * 2} 秒趋势`}>
+        {trendHistory.length > 1 && (
+          <Section title="近 240 秒趋势">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="cpu"
                 label="CPU %"
                 stroke="#3b82f6"
@@ -203,7 +204,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
                 format={pct}
               />
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="mem"
                 label="内存 %"
                 stroke="#10b981"
@@ -211,14 +212,14 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
                 format={pct}
               />
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="netIn"
                 label="下行"
                 stroke="#8b5cf6"
                 format={v => `${bytes(v)}/s`}
               />
               <Spark
-                data={history}
+                data={trendHistory}
                 dataKey="netOut"
                 label="上行"
                 stroke="#f59e0b"

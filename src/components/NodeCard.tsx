@@ -23,7 +23,7 @@ export function NodeCard({ node }: { node: Node }) {
     <a href={`#${encodeURIComponent(node.uuid)}`} className="block h-full">
       <Card
         className={cn(
-          'group h-full p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-[0_14px_34px_rgba(66,185,131,0.10)] flex flex-col gap-3',
+          'group h-full min-h-[448px] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/70 hover:shadow-[0_14px_34px_rgba(66,185,131,0.10)] flex flex-col gap-3.5',
           !node.online && 'opacity-75',
         )}
       >
@@ -62,7 +62,7 @@ export function NodeCard({ node }: { node: Node }) {
           />
         </div>
 
-        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={32} intervalMinutes={3} />
+        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={80} intervalMinutes={3} />
 
         <div className="mt-auto space-y-1.5 border-t border-dashed border-border pt-3 font-mono text-xs text-muted-foreground">
           <div className="flex items-center gap-3">

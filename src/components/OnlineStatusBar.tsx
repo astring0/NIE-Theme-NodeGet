@@ -1,5 +1,7 @@
 import { Activity } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { cn } from '../utils/cn'
+import { bytes, pct } from '../utils/format'
 import type { HistorySample } from '../types'
 
 interface OnlineStatusBarProps {
@@ -12,18 +14,31 @@ interface OnlineStatusBarProps {
   subtitle?: string
 }
 
+interface TimelineSlot {
+  active: boolean
+  start: number
+  end: number
+  sample: HistorySample | null
+}
+
 export function OnlineStatusBar({
   history,
   online,
   compact = false,
   intervalMinutes = 3,
-  slots = compact ? 32 : 48,
+  slots = 80,
   title = '在线状态',
   subtitle,
 }: OnlineStatusBarProps) {
-  const timeline = buildAvailabilityTimeline(history, online, intervalMinutes, slots)
-  const activeCount = timeline.filter(Boolean).length
+  const timeline = useMemo(
+    () => buildAvailabilityTimeline(history, online, intervalMinutes, slots),
+    [history, online, intervalMinutes, slots],
+  )
+  const activeCount = timeline.filter(item => item.active).length
   const availability = timeline.length ? (activeCount / timeline.length) * 100 : 0
+  const [hovered, setHovered] = useState<number | null>(null)
+  const activeSlot = hovered != null ? timeline[hovered] : null
+  const activeLeft = hovered != null ? `${((hovered + 0.5) / timeline.length) * 100}%` : '50%'
 
   return (
     <div
@@ -37,28 +52,33 @@ export function OnlineStatusBar({
           <Activity className={cn(compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
           {title}
         </span>
-        {subtitle && (
-          <span className="text-muted-foreground">
-            {subtitle}
-          </span>
-        )}
+        {subtitle && <span className="text-muted-foreground">{subtitle}</span>}
         <span className={cn('ml-auto font-black text-primary', compact ? 'text-[12px]' : 'text-base')}>
           {availability.toFixed(0)}%
         </span>
       </div>
 
-      <div className={cn('mt-2 flex items-end', compact ? 'gap-[3px]' : 'gap-[4px]')} aria-label={`近期在线率 ${availability.toFixed(0)}%`}>
-        {timeline.map((active, index) => (
+      <div
+        className={cn('relative mt-2 flex items-end', compact ? 'gap-[2px]' : 'gap-[3px]')}
+        aria-label={`近期在线率 ${availability.toFixed(0)}%`}
+        onMouseLeave={() => setHovered(null)}
+      >
+        {activeSlot && (
+          <StatusTooltip compact={compact} slot={activeSlot} left={activeLeft} />
+        )}
+        {timeline.map((slot, index) => (
           <span
             key={index}
             className={cn(
-              'block flex-1 rounded-full transition-all duration-300',
+              'block flex-1 cursor-default transition-all duration-200',
               compact ? 'h-6' : 'h-8',
-              active
+              slot.active
                 ? 'bg-primary shadow-[0_0_0_1px_rgba(66,185,131,0.09)]'
                 : 'bg-border/90',
             )}
-            title={`${intervalMinutes} 分钟窗口 ${index + 1}/${timeline.length}`}
+            style={{ borderRadius: 1 }}
+            title={buildTitle(slot)}
+            onMouseEnter={() => setHovered(index)}
           />
         ))}
       </div>
@@ -66,13 +86,64 @@ export function OnlineStatusBar({
   )
 }
 
+function StatusTooltip({
+  compact,
+  slot,
+  left,
+}: {
+  compact: boolean
+  slot: TimelineSlot
+  left: string
+}) {
+  const s = slot.sample
+  const timeLabel = formatTime(s?.t ?? slot.end)
+
+  return (
+    <div
+      className={cn(
+        'pointer-events-none absolute bottom-full z-20 mb-2 -translate-x-1/2 rounded-md border border-border bg-card/98 px-2.5 py-2 shadow-[0_12px_24px_rgba(15,23,42,0.10)]',
+        compact ? 'w-[154px] text-[10px]' : 'w-[176px] text-[11px]',
+      )}
+      style={{ left }}
+    >
+      <div className="font-mono text-muted-foreground">{timeLabel}</div>
+      <div className={cn('mt-0.5 flex items-center gap-1 font-semibold', slot.active ? 'text-primary' : 'text-rose-500')}>
+        <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+        {slot.active ? '在线' : '离线'}
+      </div>
+      <div className="mt-1 space-y-0.5 text-foreground/85">
+        <div>CPU {pct(s?.cpu)}</div>
+        <div>内存 {pct(s?.mem)}</div>
+        <div>磁盘 {pct(s?.disk)}</div>
+        <div>↓ {bytes(s?.netIn ?? 0)}/s · ↑ {bytes(s?.netOut ?? 0)}/s</div>
+      </div>
+    </div>
+  )
+}
+
+function buildTitle(slot: TimelineSlot) {
+  const s = slot.sample
+  return [
+    formatTime(s?.t ?? slot.end),
+    slot.active ? '在线' : '离线',
+    `CPU ${pct(s?.cpu)}`,
+    `内存 ${pct(s?.mem)}`,
+    `磁盘 ${pct(s?.disk)}`,
+    `↓ ${bytes(s?.netIn ?? 0)}/s · ↑ ${bytes(s?.netOut ?? 0)}/s`,
+  ].join('\n')
+}
+
+function formatTime(ts: number) {
+  return new Date(ts).toLocaleTimeString('zh-CN', { hour12: false })
+}
+
 export function buildAvailabilityTimeline(
   history: HistorySample[],
   online: boolean,
   intervalMinutes = 3,
-  slots = 48,
+  slots = 80,
   now = Date.now(),
-) {
+): TimelineSlot[] {
   const intervalMs = intervalMinutes * 60 * 1000
   const sorted = [...history].sort((a, b) => a.t - b.t)
   const windowStart = now - slots * intervalMs
@@ -82,16 +153,27 @@ export function buildAvailabilityTimeline(
     const slotStart = windowStart + index * intervalMs
     const slotEnd = slotStart + intervalMs
     let active = false
+    let lastSample: HistorySample | null = null
 
     while (cursor < sorted.length && sorted[cursor].t < slotStart) cursor++
 
     let probe = cursor
     while (probe < sorted.length && sorted[probe].t < slotEnd) {
       active = true
+      lastSample = sorted[probe]
       probe++
     }
 
-    if (!active && index === slots - 1 && online) active = true
-    return active
+    if (!active && index === slots - 1 && online && sorted.length) {
+      active = true
+      lastSample = sorted.at(-1) ?? null
+    }
+
+    return {
+      active,
+      start: slotStart,
+      end: slotEnd,
+      sample: lastSample,
+    }
   })
 }
