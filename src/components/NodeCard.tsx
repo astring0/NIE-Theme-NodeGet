@@ -3,15 +3,17 @@ import { Badge } from './ui/badge'
 import { Card } from './ui/card'
 import { Flag } from './Flag'
 import { OnlineStatusBar } from './OnlineStatusBar'
+import { MiniTcpingPanel } from './MiniTcpingPanel'
 import { ResourceRing } from './ResourceRing'
 import { StatusDot } from './StatusDot'
 import { bytes, relativeAge, uptime } from '../utils/format'
 import { cpuLabel, deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
 import { cn } from '../utils/cn'
+import type { BackendPool } from '../api/pool'
 import type { Node } from '../types'
 import type { ReactNode } from 'react'
 
-export function NodeCard({ node }: { node: Node }) {
+export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null }) {
   const u = deriveUsage(node)
   const tags = Array.isArray(node.meta?.tags) ? node.meta.tags : []
   const os = osLabel(node)
@@ -63,6 +65,8 @@ export function NodeCard({ node }: { node: Node }) {
         </div>
 
         <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={3} />
+
+        <MiniTcpingPanel node={node} pool={pool} />
 
         <div className="mt-auto space-y-1.5 border-t border-dashed border-border pt-3 font-mono text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
