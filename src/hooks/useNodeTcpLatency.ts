@@ -1,17 +1,10 @@
 import { useEffect, useState } from 'react'
-import { taskQuery } from '../api/methods'
+import { fetchLatencyRows } from './useNodeLatency'
 import type { BackendPool } from '../api/pool'
 import type { TaskQueryResult } from '../types'
 
-const WINDOW_MS = 60 * 60 * 1000
 const REFRESH_MS = 30_000
-const QUERY_TIMEOUT_MS = 15_000
-
-function clean(rows: TaskQueryResult[] | undefined): TaskQueryResult[] {
-  return (rows ?? [])
-    .filter(r => r.cron_source && r.cron_source !== '未知')
-    .sort((a, b) => a.timestamp - b.timestamp)
-}
+const QUERY_TIMEOUT_MS = 20_000
 
 export function useNodeTcpLatency(
   pool: BackendPool | null,
@@ -20,9 +13,11 @@ export function useNodeTcpLatency(
 ) {
   const [tcpData, setTcpData] = useState<TaskQueryResult[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     setTcpData([])
+    setError(null)
 
     if (!pool || !source || !uuid) return
     const entry = pool.entries.find(e => e.name === source)
@@ -31,19 +26,19 @@ export function useNodeTcpLatency(
     let cancelled = false
 
     const fetchOnce = async () => {
-      const now = Date.now()
-      const window: [number, number] = [now - WINDOW_MS, now]
       setLoading(true)
 
       try {
-        const rows = await taskQuery(
-          entry.client,
-          [{ uuid }, { timestamp_from_to: window }, { type: 'tcp_ping' }, { limit: 600 }],
-          QUERY_TIMEOUT_MS,
-        )
-        if (!cancelled) setTcpData(clean(rows))
-      } catch {
-        if (!cancelled) setTcpData([])
+        const rows = await fetchLatencyRows(entry.client, uuid, 'tcp_ping', QUERY_TIMEOUT_MS)
+        if (!cancelled) {
+          setTcpData(rows)
+          setError(null)
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setTcpData([])
+          setError(e instanceof Error ? e.message : String(e))
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -57,5 +52,5 @@ export function useNodeTcpLatency(
     }
   }, [pool, source, uuid])
 
-  return { tcpData, loading }
+  return { tcpData, loading, error }
 }

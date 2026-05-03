@@ -75,7 +75,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     return () => el.removeEventListener('scroll', onScroll)
   }, [node])
 
-  const { pingData, tcpData, loading: latencyLoading } = useNodeLatency(
+  const { pingData, tcpData, loading: latencyLoading, error: latencyError } = useNodeLatency(
     pool,
     node?.source ?? null,
     node?.uuid ?? null,
@@ -234,8 +234,9 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
           rows={tcpData}
           type="tcp_ping"
           loading={latencyLoading}
+          error={latencyError}
         />
-        <LatencyBlock title="Ping" rows={pingData} type="ping" loading={latencyLoading} />
+        <LatencyBlock title="Ping" rows={pingData} type="ping" loading={latencyLoading} error={latencyError} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <Section title="系统">
@@ -355,11 +356,12 @@ interface LatencyBlockProps {
   rows: TaskQueryResult[]
   type: LatencyType
   loading: boolean
+  error?: string | null
 }
 
 const ms = (v: number) => `${v.toFixed(1)} ms`
 
-function LatencyBlock({ title, rows, type, loading }: LatencyBlockProps) {
+function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) {
   const { data, series } = useMemo(() => buildLatencyChart(rows, type), [rows, type])
   const stats = useMemo(() => computeLatencyStats(rows, type), [rows, type])
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
@@ -379,8 +381,8 @@ function LatencyBlock({ title, rows, type, loading }: LatencyBlockProps) {
     <Section title={`${title} · 近 1 小时`}>
       <div className="relative h-60">
         {empty && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-            {loading ? '加载中…' : `暂无 ${type} 数据`}
+          <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-muted-foreground">
+            {loading ? '加载中…' : error ? `Task 查询失败：${error}` : `暂无 ${type} 数据`}
           </div>
         )}
         {!empty && (

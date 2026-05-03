@@ -2,6 +2,7 @@ import { Activity } from 'lucide-react'
 import { useMemo } from 'react'
 import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
 import { cn } from '../utils/cn'
+import { extractLatencyValue, latencySeriesName } from '../utils/latency'
 import type { BackendPool } from '../api/pool'
 import type { Node, TaskQueryResult } from '../types'
 
@@ -23,7 +24,7 @@ interface SeriesSummary {
 }
 
 export function MiniTcpingPanel({ node, pool }: Props) {
-  const { tcpData, loading } = useNodeTcpLatency(pool, node.source, node.uuid)
+  const { tcpData, loading, error } = useNodeTcpLatency(pool, node.source, node.uuid)
   const series = useMemo(() => summarizeTcping(tcpData), [tcpData])
 
   return (
@@ -41,8 +42,8 @@ export function MiniTcpingPanel({ node, pool }: Props) {
           ))}
         </div>
       ) : (
-        <div className="flex h-[76px] items-center justify-center rounded-xl border border-dashed border-border/80 text-[11px] font-bold text-muted-foreground">
-          {loading ? '读取 TCPing…' : '暂无 TCPing 数据'}
+        <div className="flex h-[76px] items-center justify-center rounded-xl border border-dashed border-border/80 px-3 text-center text-[11px] font-bold text-muted-foreground">
+          {loading ? '读取 TCPing…' : error ? `TCPing 查询失败：${error}` : '暂无 TCPing 数据'}
         </div>
       )}
     </div>
@@ -59,7 +60,7 @@ function TcpingRow({ item }: { item: SeriesSummary }) {
             key={i}
             className="block flex-1 rounded-[1px]"
             style={{ backgroundColor: segmentColor(v) }}
-            title={`${item.label} ${v == null ? '丢包' : `${v.toFixed(1)} ms`}`}
+            title={`${item.label} ${v == null ? '丢包/无数据' : `${v.toFixed(1)} ms`}`}
           />
         ))}
       </div>
@@ -76,14 +77,14 @@ function TcpingRow({ item }: { item: SeriesSummary }) {
 function summarizeTcping(rows: TaskQueryResult[]): SeriesSummary[] {
   const groups = new Map<string, TaskQueryResult[]>()
   for (const row of rows) {
-    const name = row.cron_source || '未知'
+    const name = latencySeriesName(row, 'tcp_ping')
     if (!groups.has(name)) groups.set(name, [])
     groups.get(name)!.push(row)
   }
 
   return [...groups.entries()]
     .map(([name, list]) => {
-      const values = list.slice(-SEGMENTS).map(row => pickTcpValue(row))
+      const values = list.slice(-SEGMENTS).map(row => extractLatencyValue(row, 'tcp_ping'))
       while (values.length < SEGMENTS) values.unshift(null)
       const valid = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
       const avg = valid.length ? valid.reduce((sum, v) => sum + v, 0) / valid.length : null
@@ -101,11 +102,6 @@ function summarizeTcping(rows: TaskQueryResult[]): SeriesSummary[] {
       }
     })
     .sort((a, b) => providerRank(a.name) - providerRank(b.name) || (a.avg ?? Infinity) - (b.avg ?? Infinity))
-}
-
-function pickTcpValue(row: TaskQueryResult) {
-  const v = row.task_event_result?.tcp_ping
-  return row.success && typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
 function displayProvider(name: string) {
