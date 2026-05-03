@@ -96,14 +96,14 @@ export interface SiteConfig {
 }
 
 export interface TaskQueryResult {
-  task_id?: number
+  task_id: number
   timestamp: number
   uuid: string
-  success?: boolean
+  success: boolean
   error_message?: string | null
-  cron_source?: string | null
-  task_event_type?: Record<string, unknown> | string | null
-  task_event_result: unknown
+  cron_source?: string
+  task_event_type?: Record<string, string>
+  task_event_result: Record<string, unknown> | null
 }
 
 export interface TaskQueryCondition {

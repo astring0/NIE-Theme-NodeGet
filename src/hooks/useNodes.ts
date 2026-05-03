@@ -51,7 +51,7 @@ const META_KEYS = [
   'metadata_expire_time',
 ]
 const DYN_INTERVAL_MS = 2000
-const HISTORY_LIMIT = 3600
+const HISTORY_LIMIT = 60
 
 function emptyMeta(): NodeMeta {
   return {

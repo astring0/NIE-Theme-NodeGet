@@ -43,19 +43,19 @@ export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onS
       ref={headerRef}
       className={`sticky top-0 z-10 transition-[background-color,backdrop-filter,border-color] duration-200 ${
         stuck
-          ? 'border-b border-dashed border-border bg-background/90 backdrop-blur'
-          : 'border-b border-dashed border-border/70 bg-background/70 backdrop-blur-sm'
+          ? 'border-b border-border/40 backdrop-blur bg-background/70'
+          : 'border-b border-transparent'
       }`}
     >
-      <div className="max-w-6xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-3 px-3 sm:px-6 py-3">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 px-4 sm:px-6 py-3">
         <a
           href="./"
-          className="flex min-w-0 shrink-0 items-center gap-3 transition-opacity hover:opacity-80"
+          className="flex items-center gap-2 min-w-0 shrink-0 hover:opacity-80 transition-opacity"
         >
-          {logo && <img src={logo} alt="" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0 rounded-full border-2 border-border object-cover" />}
-          <span className="truncate text-lg sm:text-xl font-black tracking-wide text-primary">{siteName}</span>
+          {logo && <img src={logo} alt="" className="w-6 h-6 rounded shrink-0" />}
+          <span className="font-semibold tracking-wide truncate">{siteName}</span>
         </a>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           <div className="hidden sm:block">
             <Search value={query} onChange={onQuery} />
           </div>
@@ -80,7 +80,7 @@ export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onS
           searchOpen ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="px-4 pb-3 pt-1">
+        <div className="px-4 pt-1 pb-3">
           <Search ref={inputRef} value={query} onChange={onQuery} className="w-full" />
         </div>
       </div>
