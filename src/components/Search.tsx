@@ -13,14 +13,14 @@ interface Props {
 export const Search = forwardRef<HTMLInputElement, Props>(
   ({ value, onChange, className, autoFocus }, ref) => (
     <div className={cn('relative w-44 md:w-56', className)}>
-      <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={ref}
         type="search"
         placeholder="搜索节点…"
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="pl-8"
+        className="h-10 rounded-[14px] border-border bg-secondary pl-9 font-bold shadow-none placeholder:font-bold"
         autoFocus={autoFocus}
       />
     </div>

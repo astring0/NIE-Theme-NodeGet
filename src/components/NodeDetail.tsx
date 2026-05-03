@@ -1,17 +1,32 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import {
+  Area,
+  AreaChart,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
 import { Flag } from './Flag'
 import { StatusDot } from './StatusDot'
-import { NodeLatencyChart } from './NodeLatencyChart'
 import { bytes, pct, relativeAge, uptime } from '../utils/format'
 import { deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
-import { strokeColor } from '../utils/cn'
-import type { BackendToken } from '../api/pool'
-import type { HistorySample, Node } from '../types'
+import { cycleProgress, hasCost, remainingDays, remainingValue } from '../utils/cost'
+import { cn, strokeColor } from '../utils/cn'
+import {
+  buildLatencyChart,
+  computeLatencyStats,
+  type LatencyStats,
+} from '../utils/latency'
+import { useNodeLatency } from '../hooks/useNodeLatency'
+import type { BackendPool } from '../api/pool'
+import type { HistorySample, LatencyType, Node, NodeMeta, TaskQueryResult } from '../types'
 
 const TOOLTIP_STYLE = {
   background: 'hsl(var(--popover))',
@@ -24,10 +39,14 @@ interface Props {
   node: Node | null
   onClose: () => void
   showSource?: boolean
-  backend?: BackendToken | null
+  pool: BackendPool | null
 }
 
-export function NodeDetail({ node, onClose, showSource, backend }: Props) {
+export function NodeDetail({ node, onClose, showSource, pool }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [stuck, setStuck] = useState(false)
+
   useEffect(() => {
     if (!node) return
     const onKey = (e: KeyboardEvent) => {
@@ -41,6 +60,24 @@ export function NodeDetail({ node, onClose, showSource, backend }: Props) {
       document.body.style.overflow = prev
     }
   }, [node, onClose])
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setStuck(false)
+    const onScroll = () => {
+      const h = headerRef.current?.offsetHeight ?? 60
+      setStuck(el.scrollTop > h)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [node])
+
+  const { pingData, tcpData, loading: latencyLoading } = useNodeLatency(
+    pool,
+    node?.source ?? null,
+    node?.uuid ?? null,
+  )
 
   if (!node) return null
 
@@ -60,8 +97,18 @@ export function NodeDetail({ node, onClose, showSource, backend }: Props) {
   const history = node.history || []
 
   return (
-    <div className="fixed inset-0 z-50 bg-background overflow-y-auto animate-in fade-in duration-150">
-      <div className="sticky top-0 z-10 backdrop-blur bg-background/85 border-b">
+    <div
+      ref={scrollRef}
+      className="fixed inset-0 z-50 bg-background overflow-y-auto animate-in fade-in duration-150"
+    >
+      <div
+        ref={headerRef}
+        className={`sticky top-0 z-10 transition-[background-color,backdrop-filter,border-color] duration-200 ${
+          stuck
+            ? 'border-b border-border/40 backdrop-blur bg-background/70'
+            : 'border-b border-transparent'
+        }`}
+      >
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-2 sm:gap-3">
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="返回" className="shrink-0">
             <ArrowLeft className="h-4 w-4" />
@@ -153,7 +200,13 @@ export function NodeDetail({ node, onClose, showSource, backend }: Props) {
           </Section>
         )}
 
-        <NodeLatencyChart node={node} backend={backend} />
+        <LatencyBlock
+          title="TCP Ping"
+          rows={tcpData}
+          type="tcp_ping"
+          loading={latencyLoading}
+        />
+        <LatencyBlock title="Ping" rows={pingData} type="ping" loading={latencyLoading} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <Section title="系统">
@@ -192,6 +245,8 @@ export function NodeDetail({ node, onClose, showSource, backend }: Props) {
             <KV k="运行时长" v={uptime(d?.uptime)} />
             <KV k="数据更新" v={relativeAge(d?.timestamp)} />
           </Section>
+
+          {hasCost(node.meta) && <CostSection meta={node.meta} />}
         </div>
       </div>
     </div>
@@ -304,5 +359,200 @@ function Spark({ data, dataKey, label, stroke, domain, format }: SparkProps) {
         </ResponsiveContainer>
       </div>
     </div>
+  )
+}
+
+interface LatencyBlockProps {
+  title: string
+  rows: TaskQueryResult[]
+  type: LatencyType
+  loading: boolean
+}
+
+const ms = (v: number) => `${v.toFixed(1)} ms`
+
+function LatencyBlock({ title, rows, type, loading }: LatencyBlockProps) {
+  const { data, series } = useMemo(() => buildLatencyChart(rows, type), [rows, type])
+  const stats = useMemo(() => computeLatencyStats(rows, type), [rows, type])
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set())
+  const empty = data.length === 0
+
+  const visibleSeries = series.filter(s => !hidden.has(s.name))
+
+  const toggle = (name: string) =>
+    setHidden(prev => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+
+  return (
+    <Section title={`${title} · 近 1 小时`}>
+      <div className="relative h-60">
+        {empty && (
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+            {loading ? '加载中…' : `暂无 ${type} 数据`}
+          </div>
+        )}
+        {!empty && (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <XAxis
+                dataKey="t"
+                type="number"
+                domain={['dataMin', 'dataMax']}
+                scale="time"
+                tickFormatter={t => new Date(t).toLocaleTimeString()}
+                tick={{ fontSize: 11 }}
+                stroke="hsl(var(--muted-foreground))"
+              />
+              <YAxis
+                tickFormatter={v => `${v}ms`}
+                tick={{ fontSize: 11 }}
+                stroke="hsl(var(--muted-foreground))"
+                width={48}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip
+                contentStyle={TOOLTIP_STYLE}
+                labelFormatter={t => new Date(Number(t)).toLocaleTimeString()}
+                formatter={(v: number) => ms(Number(v))}
+              />
+              {visibleSeries.map(s => (
+                <Line
+                  key={s.name}
+                  type="monotone"
+                  dataKey={s.name}
+                  stroke={s.color}
+                  strokeWidth={1.5}
+                  dot={false}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+        {!empty && loading && (
+          <div className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+        )}
+      </div>
+
+      {stats.length > 0 && (
+        <div className="mt-3 border-t pt-3">
+          <div className="flex items-center px-2 pb-1 text-[11px] text-muted-foreground">
+            <span className="flex-1">来源</span>
+            <span className="w-20 text-right">平均延迟</span>
+            <span className="w-16 text-right">抖动</span>
+            <span className="w-14 text-right">丢包率</span>
+          </div>
+          <div className="space-y-0.5">
+            {stats.map(s => (
+              <LatencyStatsRow
+                key={s.name}
+                stat={s}
+                hidden={hidden.has(s.name)}
+                onToggle={() => toggle(s.name)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </Section>
+  )
+}
+
+function LatencyStatsRow({
+  stat,
+  hidden,
+  onToggle,
+}: {
+  stat: LatencyStats
+  hidden: boolean
+  onToggle: () => void
+}) {
+  const { name, color, avg, jitter, lossRate } = stat
+
+  return (
+    <div
+      onClick={onToggle}
+      className={cn(
+        'flex items-center px-2 py-1 rounded-md text-xs cursor-pointer select-none transition-opacity hover:bg-muted/60',
+        hidden && 'opacity-35',
+      )}
+    >
+      <span className="flex items-center gap-2 flex-1 min-w-0">
+        <span
+          className="inline-block w-4 h-0.5 rounded-full shrink-0"
+          style={{ background: color }}
+        />
+        <span className="truncate">{name}</span>
+      </span>
+      <span className="w-20 text-right tabular-nums font-mono">
+        {avg != null ? ms(avg) : '—'}
+      </span>
+      <span className="w-16 text-right tabular-nums font-mono">
+        {jitter != null ? ms(jitter) : '—'}
+      </span>
+      <span
+        className={cn(
+          'w-14 text-right tabular-nums font-mono',
+          lossRate >= 5 && 'text-red-500 font-medium',
+        )}
+      >
+        {lossRate.toFixed(1)}%
+      </span>
+    </div>
+  )
+}
+
+function CostSection({ meta }: { meta: NodeMeta }) {
+  const days = remainingDays(meta.expireTime)
+  const value = remainingValue(meta)
+  const progress = cycleProgress(meta)
+  const unit = meta.priceUnit || '$'
+
+  let daysLabel: string
+  let daysClass = ''
+  if (days == null) daysLabel = '未设置'
+  else if (days < 0) {
+    daysLabel = `已过期 ${Math.abs(days)} 天`
+    daysClass = 'text-red-500'
+  } else if (days <= 7) {
+    daysLabel = `${days} 天`
+    daysClass = 'text-red-500'
+  } else if (days <= 30) {
+    daysLabel = `${days} 天`
+    daysClass = 'text-orange-500'
+  } else {
+    daysLabel = `${days} 天`
+  }
+
+  const barColor =
+    days == null || days < 0
+      ? 'bg-muted-foreground/40'
+      : days <= 7
+        ? 'bg-red-500'
+        : days <= 30
+          ? 'bg-orange-500'
+          : 'bg-emerald-500'
+
+  return (
+    <Section title="费用">
+      <KV k="月费" v={meta.price > 0 ? `${unit}${meta.price} / ${meta.priceCycle} 天` : null} />
+      <KV k="到期" v={meta.expireTime || null} />
+      <KV k="剩余" v={<span className={daysClass}>{daysLabel}</span>} />
+      <KV k="剩余价值" v={meta.price > 0 ? `${unit}${value.toFixed(2)}` : null} />
+
+      {meta.expireTime && days != null && (
+        <div className="mt-3 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+          <div
+            className={cn('h-full rounded-full transition-all', barColor)}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+    </Section>
   )
 }

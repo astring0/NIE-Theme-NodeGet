@@ -4,85 +4,128 @@
 
 @layer base {
   :root {
-    --background: 220 33% 98%;
-    --foreground: 222 47% 11%;
+    --background: 0 0% 100%;
+    --foreground: 204 15% 37%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 204 15% 37%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 217 91% 60%;
+    --popover-foreground: 204 15% 37%;
+    --primary: 153 47% 49%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
-    --accent: 220 14% 96%;
-    --accent-foreground: 222 47% 11%;
+    --secondary: 210 40% 98%;
+    --secondary-foreground: 204 15% 37%;
+    --muted: 210 40% 98%;
+    --muted-foreground: 211 13% 65%;
+    --accent: 210 40% 98%;
+    --accent-foreground: 153 47% 49%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 14% 92%;
-    --input: 220 14% 92%;
-    --ring: 217 91% 60%;
-    --radius: 0.75rem;
+    --border: 210 23% 95%;
+    --input: 210 23% 95%;
+    --ring: 153 47% 49%;
+    --radius: 0.9rem;
   }
+
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 5.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 5.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 220 26% 14%;
+    --foreground: 210 40% 91%;
+    --card: 220 26% 14%;
+    --card-foreground: 210 40% 91%;
+    --popover: 220 26% 14%;
+    --popover-foreground: 210 40% 91%;
+    --primary: 142 51% 62%;
+    --primary-foreground: 220 26% 14%;
+    --secondary: 218 23% 23%;
+    --secondary-foreground: 210 40% 91%;
+    --muted: 218 23% 23%;
+    --muted-foreground: 214 20% 63%;
+    --accent: 218 23% 23%;
+    --accent-foreground: 142 51% 62%;
+    --destructive: 0 63% 44%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 217 91% 60%;
+    --border: 218 23% 23%;
+    --input: 218 23% 23%;
+    --ring: 142 51% 62%;
   }
+
   * {
     @apply border-border;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.35) transparent;
   }
+
+  html {
+    background: hsl(var(--background));
+  }
+
   body {
     @apply bg-background text-foreground font-sans;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.6;
+    transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
   }
 }
 
 .bg-soft {
-  background-color: hsl(220 33% 98%);
+  background-color: hsl(var(--background));
   background-image:
-    radial-gradient(60rem 36rem at 12% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
-    radial-gradient(48rem 32rem at 95% 0%, rgba(56, 189, 248, 0.18), transparent 60%),
-    radial-gradient(42rem 28rem at 85% 95%, rgba(244, 114, 182, 0.12), transparent 60%),
-    radial-gradient(38rem 30rem at 5% 90%, rgba(34, 197, 94, 0.10), transparent 60%);
-  background-attachment: fixed;
+    linear-gradient(hsl(var(--muted-foreground) / 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--muted-foreground) / 0.055) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 .dark .bg-soft {
   background-color: hsl(var(--background));
-  background-image: radial-gradient(hsl(var(--border)) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse at top, black 40%, transparent 90%);
+  background-image:
+    linear-gradient(hsl(var(--muted-foreground) / 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--muted-foreground) / 0.065) 1px, transparent 1px);
 }
 
 .card-soft {
-  background-color: rgba(255, 255, 255, 0.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 8px 24px -12px rgba(15, 23, 42, 0.10);
+  background: hsl(var(--card) / 0.98);
+  border-style: dashed;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.03), 0 0 2px rgba(0, 0, 0, 0.02);
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s ease, box-shadow 0.2s ease;
 }
+
 .dark .card-soft {
-  background-color: hsl(var(--card));
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  background: hsl(var(--card) / 0.96);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.35), 0 0 2px rgba(0, 0, 0, 0.2);
+}
+
+.nodeget-ring {
+  background: conic-gradient(var(--ring-color) var(--ring-value), hsl(var(--border) / 0.9) 0deg);
+}
+
+.dark .nodeget-ring {
+  background: conic-gradient(var(--ring-color) var(--ring-value), hsl(var(--border) / 0.95) 0deg);
 }

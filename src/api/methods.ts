@@ -1,5 +1,5 @@
 import type { RpcClient } from './client'
-import type { DynamicSummary, LatencyTaskType, StaticData, TaskQueryRow } from '../types'
+import type { DynamicSummary, StaticData, TaskQueryCondition, TaskQueryResult } from '../types'
 
 export const listAgentUuids = (c: RpcClient) =>
   c.call<{ uuids?: string[] }>('nodeget-server_list_all_agent_uuid', {}).then(r => r?.uuids || [])
@@ -15,12 +15,8 @@ export const kvGetMulti = (
   items: { namespace: string; key: string }[],
 ) => c.call<{ namespace: string; key: string; value: unknown }[]>('kv_get_multi_value', { namespace_key: items })
 
-export const taskQuery = (c: RpcClient, condition: unknown[]) =>
-  c.call<TaskQueryRow[]>('task_query', { task_data_query: { condition } })
-
-export const latencyTaskQuery = (
+export const taskQuery = (
   c: RpcClient,
-  uuid: string,
-  type: LatencyTaskType,
-  limit = 40,
-) => taskQuery(c, [{ uuid }, { type }, 'is_success', { limit }])
+  conditions: TaskQueryCondition[],
+  timeoutMs?: number,
+) => c.call<TaskQueryResult[]>('task_query', { task_data_query: { condition: conditions } }, timeoutMs)
