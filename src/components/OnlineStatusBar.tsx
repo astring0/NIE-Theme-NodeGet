@@ -24,6 +24,25 @@ interface TimelineSlot {
   sample: HistorySample | null
 }
 
+function isSampleEmpty(sample: HistorySample | null) {
+  if (!sample) return true
+  return sample.cpu == null && sample.mem == null && sample.disk == null && !sample.netIn && !sample.netOut
+}
+
+function mergeSamples(primary: HistorySample | null, fallback: HistorySample | null) {
+  if (!primary && !fallback) return null
+  if (!primary) return fallback
+  if (!fallback) return primary
+  return {
+    t: primary.t || fallback.t,
+    cpu: primary.cpu ?? fallback.cpu ?? null,
+    mem: primary.mem ?? fallback.mem ?? null,
+    disk: primary.disk ?? fallback.disk ?? null,
+    netIn: primary.netIn ?? fallback.netIn ?? 0,
+    netOut: primary.netOut ?? fallback.netOut ?? 0,
+  }
+}
+
 export function OnlineStatusBar({
   history,
   online,
@@ -39,8 +58,8 @@ export function OnlineStatusBar({
   const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
   const sourceHistory = serverHistory?.length ? serverHistory : history
   const timeline = useMemo(
-    () => buildAvailabilityTimeline(sourceHistory, online, intervalMinutes, effectiveSlots),
-    [sourceHistory, online, intervalMinutes, effectiveSlots],
+    () => buildAvailabilityTimeline(sourceHistory, online, intervalMinutes, effectiveSlots, Date.now(), history),
+    [sourceHistory, online, intervalMinutes, effectiveSlots, history],
   )
   const activeCount = timeline.filter(item => item.active).length
   const availability = timeline.length ? (activeCount / timeline.length) * 100 : 0
@@ -51,7 +70,7 @@ export function OnlineStatusBar({
   return (
     <div
       className={cn(
-        'rounded-lg border border-dashed border-border bg-secondary/40',
+        'rounded-md border border-dashed border-border bg-secondary/40',
         compact ? 'px-3 py-2.5' : 'px-5 py-4',
       )}
     >
@@ -109,7 +128,7 @@ function StatusTooltip({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute bottom-full z-20 mb-3 -translate-x-1/2 rounded-md border border-[hsl(var(--border))] bg-card px-3 py-2.5 text-left shadow-[0_18px_40px_rgba(15,23,42,0.16)] ring-1 ring-black/5',
+        'pointer-events-none absolute bottom-full z-20 mb-3 -translate-x-1/2 rounded-sm border border-[hsl(var(--border))] bg-card px-3 py-2.5 text-left shadow-[0_18px_40px_rgba(15,23,42,0.16)] ring-1 ring-black/5',
         compact ? 'w-[168px] text-[10px]' : 'w-[188px] text-[11px]',
       )}
       style={{ left, backdropFilter: 'none', opacity: 1 }}
@@ -151,9 +170,11 @@ export function buildAvailabilityTimeline(
   intervalMinutes = 3,
   slots = 80,
   now = Date.now(),
+  fallbackHistory: HistorySample[] = [],
 ): TimelineSlot[] {
   const intervalMs = intervalMinutes * 60 * 1000
   const sorted = [...history].sort((a, b) => a.t - b.t)
+  const fallbackSorted = [...fallbackHistory].sort((a, b) => a.t - b.t)
   const windowEnd = Math.ceil(now / intervalMs) * intervalMs
   const windowStart = windowEnd - slots * intervalMs
   let cursor = 0
@@ -163,6 +184,7 @@ export function buildAvailabilityTimeline(
     const slotEnd = slotStart + intervalMs
     let active = false
     let lastSample: HistorySample | null = null
+    let fallbackSample: HistorySample | null = null
 
     while (cursor < sorted.length && sorted[cursor].t < slotStart) cursor++
 
@@ -173,9 +195,34 @@ export function buildAvailabilityTimeline(
       probe++
     }
 
+    for (let i = fallbackSorted.length - 1; i >= 0; i--) {
+      const item = fallbackSorted[i]
+      if (item.t < slotStart) break
+      if (item.t < slotEnd) {
+        fallbackSample = item
+        break
+      }
+    }
+
+    if (!fallbackSample) {
+      for (let i = fallbackSorted.length - 1; i >= 0; i--) {
+        const item = fallbackSorted[i]
+        if (item.t <= slotEnd) {
+          fallbackSample = item
+          break
+        }
+      }
+    }
+
     if (!active && index === slots - 1 && online && sorted.length) {
       active = true
       lastSample = sorted.at(-1) ?? null
+    }
+
+    if (active && isSampleEmpty(lastSample)) {
+      lastSample = mergeSamples(lastSample, fallbackSample)
+    } else if (!lastSample && fallbackSample) {
+      lastSample = fallbackSample
     }
 
     return {

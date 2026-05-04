@@ -47,15 +47,15 @@ export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onS
           : 'border-b border-dashed border-border/70 bg-background/70 backdrop-blur-sm'
       }`}
     >
-      <div className="max-w-6xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-3 px-3 sm:px-6 py-3">
+      <div className="max-w-6xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 py-3 overflow-hidden">
         <a
           href="./"
-          className="flex min-w-0 shrink-0 items-center gap-3 transition-opacity hover:opacity-80"
+          className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3 transition-opacity hover:opacity-80 overflow-hidden"
         >
-          {logo && <img src={logo} alt="" className="h-10 w-10 sm:h-12 sm:w-12 shrink-0 rounded-full border-2 border-border object-cover" />}
-          <span className="truncate text-lg sm:text-xl font-black tracking-wide text-primary">{siteName}</span>
+          {logo && <img src={logo} alt="" className="h-9 w-9 sm:h-12 sm:w-12 shrink-0 rounded-full border-2 border-border object-cover" />}
+          <span className="block max-w-full truncate text-base sm:text-xl font-black tracking-wide text-primary">{siteName}</span>
         </a>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2.5">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2.5 pl-1">
           <div className="hidden sm:block">
             <Search value={query} onChange={onQuery} />
           </div>

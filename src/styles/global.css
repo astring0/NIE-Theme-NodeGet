@@ -23,7 +23,7 @@
     --border: 214 26% 88%;
     --input: 214 26% 90%;
     --ring: 153 47% 49%;
-    --radius: 0.9rem;
+    --radius: 0.65rem;
   }
 
   .dark {
@@ -60,12 +60,17 @@
 
   body {
     @apply bg-background text-foreground font-sans;
+    overflow-x: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     line-height: 1.6;
     transition:
       background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
       color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  #root {
+    overflow-x: hidden;
   }
 
   a {
@@ -112,6 +117,7 @@
 .card-soft {
   background: linear-gradient(180deg, hsl(var(--card)) 0%, hsl(var(--card) / 0.98) 100%);
   border-style: dashed;
+  border-radius: 0.72rem;
   border-color: hsl(var(--border));
   box-shadow:
     0 14px 34px rgba(15, 23, 42, 0.05),
