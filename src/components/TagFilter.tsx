@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { cn } from '../utils/cn'
 
 interface Props {
@@ -30,17 +31,17 @@ function Chip({
 }: {
   selected: boolean
   onClick: () => void
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'px-3 py-1 text-xs rounded-full border transition-colors',
+        'rounded-full border px-3 py-1 text-xs font-extrabold transition-all duration-200',
         selected
-          ? 'bg-primary text-primary-foreground border-primary'
-          : 'bg-card text-foreground/80 border-border hover:bg-accent',
+          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+          : 'border-border bg-secondary text-muted-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground',
       )}
     >
       {children}

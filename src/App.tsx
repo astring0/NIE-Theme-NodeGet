@@ -133,8 +133,6 @@ export function App() {
     const rank = new Map(regions.list.map((r, i) => [r.code, i]))
 
     return arr.sort((a, b) => {
-      if (a.online !== b.online) return a.online ? -1 : 1
-
       const ua = deriveUsage(a)
       const ub = deriveUsage(b)
       let cmp = 0
@@ -195,7 +193,7 @@ export function App() {
         onSort={setSort}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {!empty && (
           <RegionFilter
             regions={regions.list}
@@ -218,9 +216,9 @@ export function App() {
         )}
 
         {!empty && view === 'cards' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {list.map(n => (
-              <NodeCard key={n.uuid} node={n} />
+              <NodeCard key={n.uuid} node={n} pool={pool} />
             ))}
           </div>
         )}
