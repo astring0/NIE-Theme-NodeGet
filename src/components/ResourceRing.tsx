@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { pct } from '../utils/format'
+import { cn } from '../utils/cn'
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
 
 interface ResourceRingProps {
   label: string
@@ -28,10 +30,10 @@ export function ResourceRing({
   subClassName = 'mt-2 truncate text-[10px] font-bold leading-snug text-muted-foreground',
 }: ResourceRingProps) {
   const target = clampMetric(value)
-  const animated = useAnimatedMetric(target, duration)
+  const animated = useAnimatedNumber(target, duration)
   const radius = useMemo(() => 50 - strokeWidth / 2 - 1, [strokeWidth])
   const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference - (circumference * animated) / 100
+  const dashOffset = circumference - (circumference * animated.value) / 100
   const color = metricColor(value)
   const glow = metricGlow(value)
   const viewBox = '0 0 100 100'
@@ -41,6 +43,12 @@ export function ResourceRing({
     height: size,
     '--metric-glow': glow,
   } as CSSProperties
+
+  const activeValueClass = animated.animating && animated.trend === 'up'
+    ? 'text-rose-500 dark:text-rose-400'
+    : animated.animating && animated.trend === 'down'
+      ? 'text-amber-500 dark:text-amber-400'
+      : ''
 
   return (
     <div className="min-w-0 text-center" title={subTitle || sub || undefined}>
@@ -82,7 +90,9 @@ export function ResourceRing({
         />
 
         <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center leading-none">
-          <span className={centerClassName}>{Number.isFinite(value) ? pct(animated) : '—'}</span>
+          <span className={cn(centerClassName, 'transition-colors duration-150', activeValueClass)}>
+            {Number.isFinite(value) ? pct(animated.value) : '—'}
+          </span>
           <span className={labelClassName}>{label}</span>
         </div>
       </div>
@@ -94,51 +104,6 @@ export function ResourceRing({
 function clampMetric(v?: number | null) {
   if (v == null || !Number.isFinite(v)) return 0
   return Math.max(0, Math.min(100, v))
-}
-
-function easeInOutCubic(progress: number) {
-  return progress < 0.5
-    ? 4 * progress * progress * progress
-    : 1 - Math.pow(-2 * progress + 2, 3) / 2
-}
-
-function useAnimatedMetric(target: number, duration = 900) {
-  const [value, setValue] = useState(target)
-  const currentRef = useRef(target)
-
-  useEffect(() => {
-    const from = currentRef.current
-    const to = target
-    if (Math.abs(from - to) < 0.05) {
-      currentRef.current = to
-      setValue(to)
-      return
-    }
-
-    let frame = 0
-    let cancelled = false
-    const start = performance.now()
-
-    const tick = (now: number) => {
-      if (cancelled) return
-      const progress = Math.min((now - start) / duration, 1)
-      const eased = easeInOutCubic(progress)
-      const next = from + (to - from) * eased
-      currentRef.current = next
-      setValue(next)
-      if (progress < 1) frame = requestAnimationFrame(tick)
-      else currentRef.current = to
-    }
-
-    frame = requestAnimationFrame(tick)
-
-    return () => {
-      cancelled = true
-      cancelAnimationFrame(frame)
-    }
-  }, [duration, target])
-
-  return value
 }
 
 export function metricColor(v?: number | null) {

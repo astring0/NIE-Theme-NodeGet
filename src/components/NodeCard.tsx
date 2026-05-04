@@ -12,6 +12,7 @@ import { cpuLabel, deriveUsage, displayName, distroLogo, osLabel, virtLabel } fr
 import { cn } from '../utils/cn'
 import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
 import { latencyRowsToHistory } from '../utils/latency'
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
 import type { BackendPool } from '../api/pool'
 import type { Node } from '../types'
 import type { ReactNode } from 'react'
@@ -75,8 +76,8 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
 
         <div className="mt-auto space-y-1.5 border-t border-dashed border-border pt-3 font-mono text-xs text-muted-foreground">
           <div className="flex items-center gap-3">
-            <Stat icon={ArrowDown}>{bytes(u.netIn || 0)}/s</Stat>
-            <Stat icon={ArrowUp}>{bytes(u.netOut || 0)}/s</Stat>
+            <AnimatedSpeedStat icon={ArrowDown} value={u.netIn || 0} />
+            <AnimatedSpeedStat icon={ArrowUp} value={u.netOut || 0} />
           </div>
           <div className="flex items-center gap-3">
             <Stat icon={Clock}>{uptime(u.uptime)}</Stat>
@@ -103,6 +104,22 @@ function Stat({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode 
     <span className="inline-flex items-center gap-1">
       <Icon className="h-3 w-3" />
       {children}
+    </span>
+  )
+}
+
+function AnimatedSpeedStat({ icon: Icon, value }: { icon: LucideIcon; value: number }) {
+  const animated = useAnimatedNumber(value || 0, 950)
+  const tone = animated.animating
+    ? animated.trend === 'up'
+      ? 'text-primary'
+      : 'text-amber-500'
+    : 'text-muted-foreground'
+
+  return (
+    <span className={cn('inline-flex items-center gap-1 transition-colors duration-150', tone)}>
+      <Icon className="h-3 w-3" />
+      <span>{bytes(animated.value)}/s</span>
     </span>
   )
 }

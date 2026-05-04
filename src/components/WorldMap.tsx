@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps'
 import { Card } from './ui/card'
-import { displayName } from '../utils/derive'
+import { bytes, pct, uptime } from '../utils/format'
+import { deriveUsage, displayName } from '../utils/derive'
+import { cn } from '../utils/cn'
 import type { Node } from '../types'
 
 interface Props {
@@ -38,8 +40,7 @@ function groupKey(lat: number, lng: number) {
 }
 
 export function WorldMap({ nodes, onOpen }: Props) {
-  const [hover, setHover] = useState<string | null>(null)
-  const [openCluster, setOpenCluster] = useState<string | null>(null)
+  const [hoverKey, setHoverKey] = useState<string | null>(null)
   const closeTimer = useRef<number | null>(null)
 
   function cancelClose() {
@@ -48,9 +49,10 @@ export function WorldMap({ nodes, onOpen }: Props) {
       closeTimer.current = null
     }
   }
+
   function scheduleClose() {
     cancelClose()
-    closeTimer.current = window.setTimeout(() => setOpenCluster(null), 150)
+    closeTimer.current = window.setTimeout(() => setHoverKey(null), 140)
   }
 
   const groups = useMemo(() => {
@@ -77,7 +79,7 @@ export function WorldMap({ nodes, onOpen }: Props) {
       <div
         className="relative w-full overflow-hidden rounded-md border border-border/60 bg-background/40 text-foreground"
         style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
-        onClick={() => setOpenCluster(null)}
+        onClick={() => setHoverKey(null)}
       >
         <ComposableMap
           projection="geoEqualEarth"
@@ -117,79 +119,70 @@ export function WorldMap({ nodes, onOpen }: Props) {
             const isCluster = g.nodes.length > 1
             const onlineCount = g.nodes.filter(n => n.online).length
             const color = onlineCount > 0 ? GREEN : GRAY
-            const node = g.nodes[0]
-            const isOpen = isCluster ? openCluster === g.key : hover === node.uuid
+            const isOpen = hoverKey === g.key
 
             return (
               <Marker
                 key={g.key}
                 coordinates={[g.lng, g.lat]}
                 onMouseEnter={() => {
-                  if (isCluster) {
-                    cancelClose()
-                    setOpenCluster(g.key)
-                  } else {
-                    setHover(node.uuid)
-                  }
+                  cancelClose()
+                  setHoverKey(g.key)
                 }}
-                onMouseLeave={() => {
-                  if (isCluster) scheduleClose()
-                  else setHover(null)
-                }}
+                onMouseLeave={scheduleClose}
                 onClick={(e: any) => {
                   e.stopPropagation?.()
-                  if (!isCluster) onOpen?.(node.uuid)
+                  if (!isCluster) onOpen?.(g.nodes[0].uuid)
                 }}
                 style={CURSOR}
               >
-                <circle r={18} fill="transparent" />
+                <circle r={20} fill="transparent" />
 
                 <circle
-                  r={isOpen ? 14 : 8}
+                  r={isOpen ? 17 : 11}
                   fill="none"
                   stroke={color}
-                  strokeOpacity="0.45"
-                  strokeWidth="1"
-                  style={{ transition: 'r 0.3s' }}
+                  strokeOpacity={isOpen ? 0.42 : 0.32}
+                  strokeWidth="1.15"
+                  style={{ transition: 'r 0.25s ease' }}
                 />
-                {isOpen && (
-                  <circle r={22} fill="none" stroke={color} strokeOpacity="0.18" strokeWidth="0.8" />
-                )}
+                <circle
+                  r={isOpen ? 24 : 15}
+                  fill="none"
+                  stroke={color}
+                  strokeOpacity={isOpen ? 0.18 : 0.08}
+                  strokeWidth="0.9"
+                  style={{ transition: 'r 0.25s ease' }}
+                />
 
                 {onlineCount > 0 && (
-                  <circle r={9} fill={color} opacity={0.18}>
-                    <animate attributeName="r" values="6;13;6" dur="2.4s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.3;0;0.3" dur="2.4s" repeatCount="indefinite" />
+                  <circle r={10} fill={color} opacity={0.16}>
+                    <animate attributeName="r" values="7;15;7" dur="2.4s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.28;0.02;0.28" dur="2.4s" repeatCount="indefinite" />
                   </circle>
                 )}
 
                 <circle
-                  r={isCluster ? 7 : isOpen ? 4.5 : 3.4}
+                  r={isCluster ? 8.5 : isOpen ? 5.2 : 4.2}
                   fill={color}
                   stroke="white"
-                  strokeWidth={isCluster ? 1.2 : 1}
+                  strokeWidth={isCluster ? 1.3 : 1.1}
                   filter="url(#dot-glow)"
                 />
 
                 {isCluster && (
-                  <text y={2.6} textAnchor="middle" fontSize={8} fontWeight={600} fill="white" style={{ pointerEvents: 'none' }}>
+                  <text y={2.6} textAnchor="middle" fontSize={8.4} fontWeight={700} fill="white" style={{ pointerEvents: 'none' }}>
                     {g.nodes.length}
                   </text>
                 )}
 
-                {!isCluster && isOpen && (
-                  <text y={-14} textAnchor="middle" fontFamily="monospace" fontSize="10" fill="currentColor" fillOpacity="0.9" style={{ pointerEvents: 'none' }}>
-                    {displayName(node)}
-                  </text>
-                )}
-
-                {isCluster && isOpen && (
-                  <ClusterList
+                {isOpen && (
+                  <MapNodePopover
                     nodes={g.nodes}
                     lat={g.lat}
                     lng={g.lng}
                     onPick={uuid => {
-                      setOpenCluster(null)
+                      setHoverKey(null)
                       onOpen?.(uuid)
                     }}
                     onMouseEnter={cancelClose}
@@ -217,7 +210,7 @@ export function WorldMap({ nodes, onOpen }: Props) {
   )
 }
 
-function ClusterList({
+function MapNodePopover({
   nodes,
   lat,
   lng,
@@ -232,38 +225,62 @@ function ClusterList({
   onMouseEnter?: () => void
   onMouseLeave?: () => void
 }) {
-  const width = 180
-  const visibleRows = Math.min(nodes.length, 5)
-  const height = visibleRows * 22 + 10
+  const width = 220
+  const rowHeight = 80
+  const visibleRows = Math.min(nodes.length, 4)
+  const height = visibleRows * rowHeight + 14
   const gap = 14
 
   let x = -width / 2
-  if (lng > 60) x = -width + gap
-  else if (lng < -60) x = -gap
+  if (lng > 70) x = -width + gap
+  else if (lng < -70) x = -gap
 
-  const y = lat > 25 ? gap : -height - gap
+  const y = lat > 18 ? gap : -height - gap
 
   return (
     <foreignObject x={x} y={y} width={width} height={height} style={{ overflow: 'visible' }}>
       <div
-        className="rounded-md border bg-popover text-popover-foreground text-xs shadow-md py-1 max-h-32 overflow-auto"
+        className="rounded-sm border border-border/90 bg-card/95 text-card-foreground shadow-[0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur py-1.5 px-1.5 max-h-[334px] overflow-auto"
         onClick={e => e.stopPropagation()}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       >
-        {nodes.map(n => (
-          <button
-            key={n.uuid}
-            onClick={() => onPick(n.uuid)}
-            className="w-full flex items-center gap-2 px-2 py-1 hover:bg-accent text-left"
-          >
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${n.online ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-            <span className="truncate flex-1">{displayName(n)}</span>
-            {n.meta?.region && (
-              <span className="text-[10px] text-muted-foreground shrink-0">{n.meta.region}</span>
-            )}
-          </button>
-        ))}
+        {nodes.map((n, index) => {
+          const u = deriveUsage(n)
+          return (
+            <button
+              key={n.uuid}
+              onClick={() => onPick(n.uuid)}
+              className={cn(
+                'w-full rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-accent/70',
+                index !== nodes.length - 1 && 'border-b border-dashed border-border/80',
+              )}
+            >
+              <div className="flex items-start gap-2">
+                <span className={cn('mt-1 h-1.5 w-1.5 rounded-full shrink-0', n.online ? 'bg-emerald-500' : 'bg-slate-400')} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[12px] font-bold text-foreground">{displayName(n)}</span>
+                    <span className="shrink-0 text-[10px] font-semibold text-muted-foreground uppercase">{n.meta?.region || '—'}</span>
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-muted-foreground">{n.source}</div>
+                  <div className="mt-2 grid grid-cols-[34px_1fr] gap-x-2 gap-y-0.5 text-[10px] leading-4">
+                    <span className="text-muted-foreground">CPU</span>
+                    <span className="font-mono text-right">{pct(u.cpu)}</span>
+                    <span className="text-muted-foreground">内存</span>
+                    <span className="font-mono text-right">{pct(u.mem)}</span>
+                    <span className="text-muted-foreground">↑ 入</span>
+                    <span className="font-mono text-right">{bytes(u.netIn)}/s</span>
+                    <span className="text-muted-foreground">↓ 出</span>
+                    <span className="font-mono text-right">{bytes(u.netOut)}/s</span>
+                    <span className="text-muted-foreground">运行</span>
+                    <span className="font-mono text-right">{uptime(u.uptime)}</span>
+                  </div>
+                </div>
+              </div>
+            </button>
+          )
+        })}
       </div>
     </foreignObject>
   )
