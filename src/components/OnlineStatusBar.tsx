@@ -69,8 +69,8 @@ export function OnlineStatusBar({
   const isMobile = useIsMobile()
   const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
   const resourceHistory = history || []
-  // 资源上报优先。TCPing 只在没有任何资源历史时兜底，不参与覆盖机器在线状态。
-  const tcpHistory = resourceHistory.length ? [] : (serverHistory || [])
+  // 资源上报优先，但历史格子用 TCPing 成功记录做补充，避免所有机器只按前端轮询时间显示成同一条。
+  const tcpHistory = serverHistory || []
   const pendingRemoteHistory = false
   const timeline = useMemo(
     () => buildAvailabilityTimeline(resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots),
@@ -229,12 +229,17 @@ export function buildAvailabilityTimeline(
     const tcpInSlot = lastSampleInWindow(tcp, slotStart, slotEnd)
     const resourceBefore = nearestSampleBefore(resources, slotEnd)
 
-    const hasResource = hasResourceSignal(resourceInSlot)
-    const hasTcp = !resources.length && Boolean(tcpInSlot)
-    let active = hasResource || hasTcp
+    // 浏览器里的资源历史是“当前访问者本地采样”，所有节点通常会在同一秒被轮询，
+    // 如果把它当作 4 小时历史，会让所有 VPS 的绿色格子位置几乎一样。
+    // 有后端 TCPing 历史时，历史段用 TCPing 成功记录区分；资源上报只兜住最近两个格子，避免回国线路丢包误判当前离线。
+    const resourceCanOverride = !tcp.length || slotEnd > now - intervalMs * 2
+    const hasResource = resourceCanOverride && hasResourceSignal(resourceInSlot)
+    const hasTcpSuccess = Boolean(tcpInSlot)
+
+    let active = hasResource || hasTcpSuccess
     let sample = hasResource
       ? resourceInSlot
-      : hasTcp
+      : hasTcpSuccess
         ? mergeSamples(tcpInSlot, resourceBefore)
         : null
 
