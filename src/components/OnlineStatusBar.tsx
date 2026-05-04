@@ -69,7 +69,7 @@ export function OnlineStatusBar({
   const isMobile = useIsMobile()
   const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
   const resourceHistory = history || []
-  // 资源上报优先，但历史格子用 TCPing 成功记录做补充，避免所有机器只按前端轮询时间显示成同一条。
+  // 历史在线状态优先使用后端真实任务结果，避免前端同秒轮询导致所有机器出现一样的格子图。
   const tcpHistory = serverHistory || []
   const pendingRemoteHistory = false
   const timeline = useMemo(
@@ -221,6 +221,7 @@ export function buildAvailabilityTimeline(
   const windowEnd = Math.ceil(now / intervalMs) * intervalMs
   const windowStart = windowEnd - slots * intervalMs
   const latestResource = resources.at(-1) ?? null
+  const hasRemoteHistory = tcp.length > 0
 
   return Array.from({ length: slots }, (_, index) => {
     const slotStart = windowStart + index * intervalMs
@@ -229,32 +230,31 @@ export function buildAvailabilityTimeline(
     const tcpInSlot = lastSampleInWindow(tcp, slotStart, slotEnd)
     const resourceBefore = nearestSampleBefore(resources, slotEnd)
 
-    // 浏览器里的资源历史是“当前访问者本地采样”，所有节点通常会在同一秒被轮询，
-    // 如果把它当作 4 小时历史，会让所有 VPS 的绿色格子位置几乎一样。
-    // 有后端 TCPing 历史时，历史段用 TCPing 成功记录区分；资源上报只兜住最近两个格子，避免回国线路丢包误判当前离线。
-    const resourceCanOverride = !tcp.length || slotEnd > now - intervalMs * 2
-    const hasResource = resourceCanOverride && hasResourceSignal(resourceInSlot)
-    const hasTcpSuccess = Boolean(tcpInSlot)
+    let active = false
+    let sample: HistorySample | null = null
 
-    let active = hasResource || hasTcpSuccess
-    let sample = hasResource
-      ? resourceInSlot
-      : hasTcpSuccess
-        ? mergeSamples(tcpInSlot, resourceBefore)
-        : null
+    if (hasRemoteHistory) {
+      // 有后端任务历史时，只按真实任务结果绘制历史格子；当前格子允许用实时资源状态兜底。
+      active = Boolean(tcpInSlot)
+      sample = active ? mergeSamples(tcpInSlot, resourceBefore) : null
 
-    if (!active && index === slots - 1 && online && latestResource) {
-      active = true
-      sample = latestResource
+      if (!active && index === slots - 1 && online && hasResourceSignal(latestResource)) {
+        active = true
+        sample = latestResource
+      }
+    } else {
+      // 没有后端历史时，退回到当前会话真实资源采样。
+      active = hasResourceSignal(resourceInSlot)
+      sample = active ? resourceInSlot : null
+
+      if (!active && index === slots - 1 && online && hasResourceSignal(latestResource)) {
+        active = true
+        sample = latestResource
+      }
     }
 
     if (active && isSampleEmpty(sample)) sample = mergeSamples(sample, resourceBefore)
 
-    return {
-      active,
-      start: slotStart,
-      end: slotEnd,
-      sample,
-    }
+    return { active, start: slotStart, end: slotEnd, sample }
   })
 }

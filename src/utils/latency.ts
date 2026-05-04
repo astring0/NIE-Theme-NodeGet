@@ -105,6 +105,44 @@ export function latencySeriesName(row: TaskQueryResult, type?: LatencyType) {
   return name.trim() || '未知'
 }
 
+
+export function providerKeyFromSeries(name: string) {
+  const lower = name.toLowerCase()
+  if (name.includes('电信') || /(^|[^a-z])ct([^a-z]|$)/.test(lower) || lower.includes('telecom')) return 'telecom'
+  if (name.includes('联通') || /(^|[^a-z])cu([^a-z]|$)/.test(lower) || lower.includes('unicom')) return 'unicom'
+  if (name.includes('移动') || /(^|[^a-z])cm([^a-z]|$)/.test(lower) || lower.includes('mobile')) return 'mobile'
+  return null
+}
+
+export function selectLatestSeriesNames(rows: TaskQueryResult[], type: LatencyType) {
+  const latest = new Map<string, { name: string; ts: number }>()
+  const passthrough = new Set<string>()
+
+  for (const row of rows) {
+    const name = latencySeriesName(row, type)
+    const ts = normalizeTs(row.timestamp)
+    const provider = providerKeyFromSeries(name)
+    if (!provider) {
+      passthrough.add(name)
+      continue
+    }
+    const current = latest.get(provider)
+    if (!current || ts > current.ts || (ts === current.ts && name.localeCompare(current.name) > 0)) {
+      latest.set(provider, { name, ts })
+    }
+  }
+
+  return new Set<string>([
+    ...passthrough,
+    ...[...latest.values()].map(item => item.name),
+  ])
+}
+
+export function filterRowsByLatestSeries(rows: TaskQueryResult[], type: LatencyType) {
+  const keep = selectLatestSeriesNames(rows, type)
+  return rows.filter(row => keep.has(latencySeriesName(row, type)))
+}
+
 function seriesNames(rows: TaskQueryResult[], type: LatencyType) {
   const set = new Set<string>()
   for (const r of rows) set.add(latencySeriesName(r, type))

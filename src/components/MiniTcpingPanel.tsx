@@ -1,7 +1,7 @@
 import { Activity } from 'lucide-react'
 import { useMemo } from 'react'
 import { cn } from '../utils/cn'
-import { buildLatencyQualityRows, qualitySegmentColor } from '../utils/latency'
+import { buildLatencyQualityRows, filterRowsByLatestSeries, qualitySegmentColor } from '../utils/latency'
 import type { Node, TaskQueryResult } from '../types'
 
 const SEGMENTS = 22
@@ -76,7 +76,9 @@ function TcpingRow({ item }: { item: SeriesSummary }) {
 }
 
 function summarizeTcping(rows: TaskQueryResult[]): SeriesSummary[] {
-  return buildLatencyQualityRows(rows, 'tcp_ping', SEGMENTS, {
+  const filteredRows = filterRowsByLatestSeries(rows, 'tcp_ping')
+
+  return buildLatencyQualityRows(filteredRows, 'tcp_ping', SEGMENTS, {
     windowMs: MINI_WINDOW_MS,
     bucketMs: MINI_BUCKET_MS,
     buckets: SEGMENTS,
