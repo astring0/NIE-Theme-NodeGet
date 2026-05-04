@@ -12,7 +12,6 @@ interface OnlineStatusBarProps {
   intervalMinutes?: number
   slots?: number
   title?: string
-  subtitle?: string
   mobileHalf?: boolean
   serverHistory?: HistorySample[]
   loading?: boolean
@@ -61,7 +60,6 @@ export function OnlineStatusBar({
   intervalMinutes = 3,
   slots = 80,
   title = '在线状态',
-  subtitle,
   mobileHalf = true,
   serverHistory,
   loading = false,
@@ -97,7 +95,6 @@ export function OnlineStatusBar({
           <Activity className={cn(compact ? 'h-3.5 w-3.5' : 'h-4 w-4')} />
           {title}
         </span>
-        {subtitle && <span className="text-muted-foreground">{subtitle}</span>}
         <span className={cn('ml-auto font-black text-primary', compact ? 'text-[12px]' : 'text-base')}>
           {pendingRemoteHistory ? '…' : `${availability.toFixed(0)}%`}
         </span>

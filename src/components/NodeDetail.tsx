@@ -203,7 +203,6 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
             intervalMinutes={3}
             slots={onlineSlots}
             title="在线状态"
-            subtitle={`每格 3 分钟，共 ${onlineSlots} 格`}
           />
         </Section>
 
