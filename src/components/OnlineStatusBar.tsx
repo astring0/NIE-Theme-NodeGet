@@ -70,12 +70,10 @@ export function OnlineStatusBar({
   const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
   const resourceHistory = history || []
   const tcpHistory = serverHistory || []
-  const pendingRemoteHistory = loading && tcpHistory.length === 0
+  const pendingRemoteHistory = false
   const timeline = useMemo(
-    () => pendingRemoteHistory
-      ? buildEmptyTimeline(intervalMinutes, effectiveSlots)
-      : buildAvailabilityTimeline(resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots),
-    [pendingRemoteHistory, resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots],
+    () => buildAvailabilityTimeline(resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots),
+    [resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots],
   )
   const activeCount = timeline.filter(item => item.active).length
   const availability = timeline.length ? (activeCount / timeline.length) * 100 : 0

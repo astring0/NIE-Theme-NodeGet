@@ -133,8 +133,6 @@ export function App() {
     const rank = new Map(regions.list.map((r, i) => [r.code, i]))
 
     return arr.sort((a, b) => {
-      if (a.online !== b.online) return a.online ? -1 : 1
-
       const ua = deriveUsage(a)
       const ub = deriveUsage(b)
       let cmp = 0

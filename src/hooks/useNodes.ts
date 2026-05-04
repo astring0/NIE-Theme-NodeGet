@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackendPool } from '../api/pool'
 import { dynamicSummaryMulti, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
-import { isOnline } from '../utils/status'
+import { isOnline, normalizeMs } from '../utils/status'
 import type { DynamicSummary, HistorySample, Node, NodeMeta, SiteConfig } from '../types'
 
 type Agent = Pick<Node, 'uuid' | 'source' | 'meta' | 'static'>
@@ -50,7 +50,7 @@ const META_KEYS = [
   'metadata_price_cycle',
   'metadata_expire_time',
 ]
-const DYN_INTERVAL_MS = 2000
+const DYN_INTERVAL_MS = 10_000
 const HISTORY_LIMIT = 3600
 const HISTORY_CACHE_KEY = 'nodeget.history.cache.v11'
 
@@ -101,7 +101,7 @@ function sampleFrom(row: DynamicSummary): HistorySample {
   const memTotal = row.total_memory || 0
   const diskTotal = row.total_space || 0
   return {
-    t: row.timestamp,
+    t: normalizeMs(row.timestamp) ?? Date.now(),
     cpu: row.cpu_usage ?? null,
     mem: memTotal && row.used_memory != null ? (row.used_memory / memTotal) * 100 : null,
     disk:
@@ -219,7 +219,12 @@ export function useNodes(config: SiteConfig | null) {
 
       setLive(prev => {
         const next = new Map(prev)
-        for (const row of updates) next.set(row.uuid, row)
+        for (const row of updates) {
+          const cur = next.get(row.uuid)
+          const rowTs = normalizeMs(row.timestamp) ?? 0
+          const curTs = normalizeMs(cur?.timestamp) ?? 0
+          if (!cur || rowTs >= curTs) next.set(row.uuid, row)
+        }
         return next
       })
       setHistory(prev => {
