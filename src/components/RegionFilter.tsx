@@ -1,6 +1,6 @@
 import { cn } from '../utils/cn'
 import { Flag } from './Flag'
-import type { ReactNode } from 'react'
+import React from "react";
 
 interface Props {
   regions: { code: string; count: number }[]
@@ -36,17 +36,17 @@ function Chip({
 }: {
   selected: boolean
   onClick: () => void
-  children: ReactNode
+  children: React.ReactNode
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-extrabold transition-all duration-200',
+        'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border transition-colors',
         selected
-          ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-          : 'border-border bg-secondary text-muted-foreground hover:border-primary hover:bg-primary hover:text-primary-foreground',
+          ? 'bg-primary text-primary-foreground border-primary'
+          : 'bg-card text-foreground/80 border-border hover:bg-accent',
       )}
     >
       {children}

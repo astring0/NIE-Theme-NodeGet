@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackendPool } from '../api/pool'
 import { dynamicSummaryMulti, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
-import { isOnline, normalizeMs } from '../utils/status'
+import { isOnline } from '../utils/status'
 import type { DynamicSummary, HistorySample, Node, NodeMeta, SiteConfig } from '../types'
 
 type Agent = Pick<Node, 'uuid' | 'source' | 'meta' | 'static'>
@@ -50,9 +50,8 @@ const META_KEYS = [
   'metadata_price_cycle',
   'metadata_expire_time',
 ]
-const DYN_INTERVAL_MS = 10_000
-const HISTORY_LIMIT = 3600
-const HISTORY_CACHE_KEY = 'nodeget.history.cache.v11'
+const DYN_INTERVAL_MS = 2000
+const HISTORY_LIMIT = 60
 
 function emptyMeta(): NodeMeta {
   return {
@@ -101,7 +100,7 @@ function sampleFrom(row: DynamicSummary): HistorySample {
   const memTotal = row.total_memory || 0
   const diskTotal = row.total_space || 0
   return {
-    t: normalizeMs(row.timestamp) ?? Date.now(),
+    t: row.timestamp,
     cpu: row.cpu_usage ?? null,
     mem: memTotal && row.used_memory != null ? (row.used_memory / memTotal) * 100 : null,
     disk:
@@ -113,26 +112,10 @@ function sampleFrom(row: DynamicSummary): HistorySample {
   }
 }
 
-function loadHistoryCache() {
-  if (typeof window === 'undefined') return new Map<string, HistorySample[]>()
-  try {
-    const raw = sessionStorage.getItem(HISTORY_CACHE_KEY)
-    if (!raw) return new Map<string, HistorySample[]>()
-    const parsed = JSON.parse(raw) as Record<string, HistorySample[]>
-    const map = new Map<string, HistorySample[]>()
-    for (const [k, list] of Object.entries(parsed || {})) {
-      if (Array.isArray(list)) map.set(k, list.filter(item => item && typeof item.t === 'number').slice(-HISTORY_LIMIT))
-    }
-    return map
-  } catch {
-    return new Map<string, HistorySample[]>()
-  }
-}
-
 export function useNodes(config: SiteConfig | null) {
   const [agents, setAgents] = useState<Map<string, Agent>>(new Map())
   const [live, setLive] = useState<Map<string, DynamicSummary>>(new Map())
-  const [history, setHistory] = useState<Map<string, HistorySample[]>>(loadHistoryCache)
+  const [history, setHistory] = useState<Map<string, HistorySample[]>>(new Map())
   const [errors, setErrors] = useState<BackendError[]>([])
   const [loading, setLoading] = useState(true)
   const [tick, setTick] = useState(0)
@@ -219,12 +202,7 @@ export function useNodes(config: SiteConfig | null) {
 
       setLive(prev => {
         const next = new Map(prev)
-        for (const row of updates) {
-          const cur = next.get(row.uuid)
-          const rowTs = normalizeMs(row.timestamp) ?? 0
-          const curTs = normalizeMs(cur?.timestamp) ?? 0
-          if (!cur || rowTs >= curTs) next.set(row.uuid, row)
-        }
+        for (const row of updates) next.set(row.uuid, row)
         return next
       })
       setHistory(prev => {
@@ -260,15 +238,6 @@ export function useNodes(config: SiteConfig | null) {
       pool.close()
     }
   }, [config])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const payload: Record<string, HistorySample[]> = {}
-      for (const [uuid, list] of history) payload[uuid] = list.slice(-HISTORY_LIMIT)
-      sessionStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(payload))
-    } catch {}
-  }, [history])
 
   const nodes = useMemo(() => {
     const now = Date.now()
