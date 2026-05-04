@@ -90,6 +90,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     node?.source ?? null,
     node?.uuid ?? null,
   )
+  const serverHistory = useMemo(() => latencyRowsToHistory(availabilityTcpData, 'tcp_ping'), [availabilityTcpData])
 
   if (!node) return null
 
@@ -109,7 +110,6 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
   const history = node.history || []
   const trendHistory = history.slice(-120)
   const onlineSlots = isMobile ? 40 : 80
-  const serverHistory = useMemo(() => latencyRowsToHistory(availabilityTcpData, 'tcp_ping'), [availabilityTcpData])
 
   return (
     <div
