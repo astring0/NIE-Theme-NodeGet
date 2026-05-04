@@ -71,10 +71,13 @@ export function OnlineStatusBar({
   const resourceHistory = history || []
   // 历史在线状态优先使用后端真实任务结果，避免前端同秒轮询导致所有机器出现一样的格子图。
   const tcpHistory = serverHistory || []
-  const pendingRemoteHistory = false
+  const pendingRemoteHistory = loading && tcpHistory.length === 0
   const timeline = useMemo(
-    () => buildAvailabilityTimeline(resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots),
-    [resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots],
+    () =>
+      pendingRemoteHistory
+        ? buildEmptyTimeline(intervalMinutes, effectiveSlots)
+        : buildAvailabilityTimeline(resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots),
+    [resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots, pendingRemoteHistory],
   )
   const activeCount = timeline.filter(item => item.active).length
   const availability = timeline.length ? (activeCount / timeline.length) * 100 : 0
