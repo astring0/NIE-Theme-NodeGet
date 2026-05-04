@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Clock, type LucideIcon } from 'lucide-react'
+import { useMemo } from 'react'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
 import { Flag } from './Flag'
@@ -9,6 +10,8 @@ import { StatusDot } from './StatusDot'
 import { bytes, relativeAge, uptime } from '../utils/format'
 import { cpuLabel, deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
 import { cn } from '../utils/cn'
+import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
+import { latencyRowsToHistory } from '../utils/latency'
 import type { BackendPool } from '../api/pool'
 import type { Node } from '../types'
 import type { ReactNode } from 'react'
@@ -20,6 +23,8 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
   const logo = distroLogo(node)
   const virt = virtLabel(node)
   const cpu = cpuLabel(node)
+  const { tcpData, loading: tcpLoading, error: tcpError } = useNodeTcpLatency(pool, node.source, node.uuid)
+  const serverHistory = useMemo(() => latencyRowsToHistory(tcpData, 'tcp_ping'), [tcpData])
 
   return (
     <a href={`#${encodeURIComponent(node.uuid)}`} className="block h-full">
@@ -64,9 +69,9 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
           />
         </div>
 
-        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={3} />
+        <OnlineStatusBar history={node.history || []} serverHistory={serverHistory} online={node.online} compact slots={40} intervalMinutes={3} />
 
-        <MiniTcpingPanel node={node} pool={pool} />
+        <MiniTcpingPanel node={node} tcpData={tcpData} loading={tcpLoading} error={tcpError} />
 
         <div className="mt-auto space-y-1.5 border-t border-dashed border-border pt-3 font-mono text-xs text-muted-foreground">
           <div className="flex items-center gap-3">

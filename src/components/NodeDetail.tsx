@@ -25,9 +25,11 @@ import {
   buildLatencyChart,
   buildLatencyQualityRows,
   qualitySegmentColor,
+  latencyRowsToHistory,
   type LatencyQualityRow,
 } from '../utils/latency'
 import { useNodeLatency } from '../hooks/useNodeLatency'
+import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
 import { useIsMobile } from '../hooks/useIsMobile'
 import type { BackendPool } from '../api/pool'
 import type { HistorySample, LatencyType, Node, NodeMeta, TaskQueryResult } from '../types'
@@ -83,6 +85,11 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     node?.source ?? null,
     node?.uuid ?? null,
   )
+  const { tcpData: availabilityTcpData } = useNodeTcpLatency(
+    pool,
+    node?.source ?? null,
+    node?.uuid ?? null,
+  )
 
   if (!node) return null
 
@@ -102,6 +109,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
   const history = node.history || []
   const trendHistory = history.slice(-120)
   const onlineSlots = isMobile ? 40 : 80
+  const serverHistory = useMemo(() => latencyRowsToHistory(availabilityTcpData, 'tcp_ping'), [availabilityTcpData])
 
   return (
     <div
@@ -188,6 +196,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
         <Section title="在线状态">
           <OnlineStatusBar
             history={history}
+            serverHistory={serverHistory}
             online={node.online}
             intervalMinutes={3}
             slots={onlineSlots}

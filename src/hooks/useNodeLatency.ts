@@ -27,9 +27,10 @@ export async function fetchLatencyRows(
   uuid: string,
   type: LatencyType,
   timeoutMs = QUERY_TIMEOUT_MS,
+  windowMs = WINDOW_MS,
 ) {
   const now = Date.now()
-  const window: [number, number] = [now - WINDOW_MS, now]
+  const window: [number, number] = [now - windowMs, now]
 
   // 这里刻意保持和原版 StatusShow 一样的 task_query 参数格式。
   // 部分 NodeGet 后端版本不支持把 uuid / timestamp / type / limit 合并进同一个 condition 对象，

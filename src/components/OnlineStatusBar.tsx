@@ -14,6 +14,7 @@ interface OnlineStatusBarProps {
   title?: string
   subtitle?: string
   mobileHalf?: boolean
+  serverHistory?: HistorySample[]
 }
 
 interface TimelineSlot {
@@ -32,12 +33,14 @@ export function OnlineStatusBar({
   title = '在线状态',
   subtitle,
   mobileHalf = true,
+  serverHistory,
 }: OnlineStatusBarProps) {
   const isMobile = useIsMobile()
   const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
+  const sourceHistory = serverHistory?.length ? serverHistory : history
   const timeline = useMemo(
-    () => buildAvailabilityTimeline(history, online, intervalMinutes, effectiveSlots),
-    [history, online, intervalMinutes, effectiveSlots],
+    () => buildAvailabilityTimeline(sourceHistory, online, intervalMinutes, effectiveSlots),
+    [sourceHistory, online, intervalMinutes, effectiveSlots],
   )
   const activeCount = timeline.filter(item => item.active).length
   const availability = timeline.length ? (activeCount / timeline.length) * 100 : 0
@@ -48,7 +51,7 @@ export function OnlineStatusBar({
   return (
     <div
       className={cn(
-        'rounded-[22px] border border-dashed border-border bg-secondary/40',
+        'rounded-lg border border-dashed border-border bg-secondary/40',
         compact ? 'px-3 py-2.5' : 'px-5 py-4',
       )}
     >
@@ -106,7 +109,7 @@ function StatusTooltip({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute bottom-full z-20 mb-3 -translate-x-1/2 rounded-xl border border-[hsl(var(--border))] bg-card px-3 py-2.5 text-left shadow-[0_18px_40px_rgba(15,23,42,0.16)] ring-1 ring-black/5',
+        'pointer-events-none absolute bottom-full z-20 mb-3 -translate-x-1/2 rounded-md border border-[hsl(var(--border))] bg-card px-3 py-2.5 text-left shadow-[0_18px_40px_rgba(15,23,42,0.16)] ring-1 ring-black/5',
         compact ? 'w-[168px] text-[10px]' : 'w-[188px] text-[11px]',
       )}
       style={{ left, backdropFilter: 'none', opacity: 1 }}

@@ -5,6 +5,7 @@ import type { TaskQueryResult } from '../types'
 
 const REFRESH_MS = 30_000
 const QUERY_TIMEOUT_MS = 20_000
+const AVAILABILITY_WINDOW_MS = 4 * 60 * 60 * 1000
 
 export function useNodeTcpLatency(
   pool: BackendPool | null,
@@ -29,7 +30,7 @@ export function useNodeTcpLatency(
       setLoading(true)
 
       try {
-        const rows = await fetchLatencyRows(entry.client, uuid, 'tcp_ping', QUERY_TIMEOUT_MS)
+        const rows = await fetchLatencyRows(entry.client, uuid, 'tcp_ping', QUERY_TIMEOUT_MS, AVAILABILITY_WINDOW_MS)
         if (!cancelled) {
           setTcpData(rows)
           setError(null)

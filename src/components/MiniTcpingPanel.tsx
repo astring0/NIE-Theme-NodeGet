@@ -1,9 +1,7 @@
 import { Activity } from 'lucide-react'
 import { useMemo } from 'react'
-import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
 import { cn } from '../utils/cn'
 import { extractLatencyValue, latencySeriesName, qualitySegmentColor } from '../utils/latency'
-import type { BackendPool } from '../api/pool'
 import type { Node, TaskQueryResult } from '../types'
 
 const SEGMENTS = 22
@@ -11,7 +9,9 @@ const NAME_ORDER = ['电信', '联通', '移动']
 
 interface Props {
   node: Node
-  pool: BackendPool | null
+  tcpData: TaskQueryResult[]
+  loading?: boolean
+  error?: string | null
 }
 
 interface SeriesSummary {
@@ -23,12 +23,11 @@ interface SeriesSummary {
   lossRate: number
 }
 
-export function MiniTcpingPanel({ node, pool }: Props) {
-  const { tcpData, loading, error } = useNodeTcpLatency(pool, node.source, node.uuid)
+export function MiniTcpingPanel({ node, tcpData, loading = false, error = null }: Props) {
   const series = useMemo(() => summarizeTcping(tcpData), [tcpData])
 
   return (
-    <div className="hidden md:block rounded-[22px] border border-dashed border-border bg-secondary/28 px-4 py-3.5 mt-1">
+    <div className="hidden md:block rounded-lg border border-dashed border-border bg-secondary/28 px-4 py-3.5 mt-1">
       <div className="mb-3 flex items-center gap-1.5 text-xs font-black text-muted-foreground">
         <Activity className="h-3.5 w-3.5 text-primary" />
         <span>三网 TCPing</span>
@@ -42,7 +41,7 @@ export function MiniTcpingPanel({ node, pool }: Props) {
           ))}
         </div>
       ) : (
-        <div className="flex min-h-[92px] items-center justify-center rounded-xl border border-dashed border-border/80 px-4 text-center text-[11px] font-bold text-muted-foreground leading-5">
+        <div className="flex min-h-[92px] items-center justify-center rounded-md border border-dashed border-border/80 px-4 text-center text-[11px] font-bold text-muted-foreground leading-5">
           {loading ? '读取 TCPing…' : error ? simplifyError(error) : '暂无 TCPing 数据'}
         </div>
       )}

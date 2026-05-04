@@ -6,7 +6,7 @@ type DivProps = ComponentPropsWithoutRef<'div'>
 export const Card = forwardRef<HTMLDivElement, DivProps>(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn('rounded-[28px] border-[1.5px] bg-card text-card-foreground card-soft', className)}
+    className={cn('rounded-lg border bg-card text-card-foreground card-soft', className)}
     {...props}
   />
 ))

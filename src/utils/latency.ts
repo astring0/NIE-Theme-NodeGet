@@ -123,6 +123,21 @@ function forwardFill(data: ChartPoint[], names: string[]) {
   }
 }
 
+
+export function latencyRowsToHistory(rows: TaskQueryResult[], type: LatencyType) {
+  return rows
+    .filter(row => row.success && extractLatencyValue(row, type) != null)
+    .map(row => ({
+      t: normalizeTs(row.timestamp),
+      cpu: null,
+      mem: null,
+      disk: null,
+      netIn: 0,
+      netOut: 0,
+    }))
+    .sort((a, b) => a.t - b.t)
+}
+
 export function buildLatencyChart(rows: TaskQueryResult[], type: LatencyType) {
   const names = seriesNames(rows, type)
   const series: ChartSeries[] = names.map(name => ({ name, color: latencyColor(name) }))
