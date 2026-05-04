@@ -30,11 +30,12 @@ export function latencyColor(name: string) {
 }
 
 export function qualitySegmentColor(v: number | null) {
-  if (v == null) return '#ef4444'
-  if (v <= 80) return '#84cc16'
-  if (v <= 160) return '#eab308'
-  if (v <= 260) return '#fb923c'
-  return '#ef4444'
+  if (v == null) return '#dc2626' // 丢包 / 无数据：深红
+  if (v <= 45) return '#16a34a' // <=45ms：深绿
+  if (v <= 90) return '#84cc16' // 45-90ms：浅绿
+  if (v <= 160) return '#fde047' // 90-160ms：浅黄
+  if (v <= 300) return '#f59e0b' // 160-300ms：深黄
+  return '#f87171' // >300ms：浅红
 }
 
 export function normalizeTs(ts: number) {

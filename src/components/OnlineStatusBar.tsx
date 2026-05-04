@@ -15,6 +15,7 @@ interface OnlineStatusBarProps {
   subtitle?: string
   mobileHalf?: boolean
   serverHistory?: HistorySample[]
+  loading?: boolean
 }
 
 interface TimelineSlot {
@@ -24,9 +25,19 @@ interface TimelineSlot {
   sample: HistorySample | null
 }
 
+function hasResourceSignal(sample: HistorySample | null | undefined) {
+  if (!sample) return false
+  return (
+    sample.cpu != null ||
+    sample.mem != null ||
+    sample.disk != null ||
+    (sample.netIn ?? 0) > 0 ||
+    (sample.netOut ?? 0) > 0
+  )
+}
+
 function isSampleEmpty(sample: HistorySample | null) {
-  if (!sample) return true
-  return sample.cpu == null && sample.mem == null && sample.disk == null && !sample.netIn && !sample.netOut
+  return !hasResourceSignal(sample)
 }
 
 function mergeSamples(primary: HistorySample | null, fallback: HistorySample | null) {
@@ -53,13 +64,18 @@ export function OnlineStatusBar({
   subtitle,
   mobileHalf = true,
   serverHistory,
+  loading = false,
 }: OnlineStatusBarProps) {
   const isMobile = useIsMobile()
   const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
-  const sourceHistory = serverHistory?.length ? serverHistory : history
+  const resourceHistory = history || []
+  const tcpHistory = serverHistory || []
+  const pendingRemoteHistory = loading && tcpHistory.length === 0
   const timeline = useMemo(
-    () => buildAvailabilityTimeline(sourceHistory, online, intervalMinutes, effectiveSlots, Date.now(), history),
-    [sourceHistory, online, intervalMinutes, effectiveSlots, history],
+    () => pendingRemoteHistory
+      ? buildEmptyTimeline(intervalMinutes, effectiveSlots)
+      : buildAvailabilityTimeline(resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots),
+    [pendingRemoteHistory, resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots],
   )
   const activeCount = timeline.filter(item => item.active).length
   const availability = timeline.length ? (activeCount / timeline.length) * 100 : 0
@@ -81,16 +97,16 @@ export function OnlineStatusBar({
         </span>
         {subtitle && <span className="text-muted-foreground">{subtitle}</span>}
         <span className={cn('ml-auto font-black text-primary', compact ? 'text-[12px]' : 'text-base')}>
-          {availability.toFixed(0)}%
+          {pendingRemoteHistory ? '…' : `${availability.toFixed(0)}%`}
         </span>
       </div>
 
       <div
         className={cn('relative mt-2 flex items-end', compact ? 'gap-[2px]' : 'gap-[3px]')}
-        aria-label={`近期在线率 ${availability.toFixed(0)}%`}
+        aria-label={`近期在线率 ${pendingRemoteHistory ? '读取中' : `${availability.toFixed(0)}%`}`}
         onMouseLeave={() => setHovered(null)}
       >
-        {activeSlot && (
+        {activeSlot && !pendingRemoteHistory && (
           <StatusTooltip compact={compact} slot={activeSlot} left={activeLeft} />
         )}
         {timeline.map((slot, index) => (
@@ -104,7 +120,7 @@ export function OnlineStatusBar({
                 : 'bg-border/90',
             )}
             style={{ borderRadius: 1 }}
-            title={buildTitle(slot)}
+            title={pendingRemoteHistory ? '读取在线状态…' : buildTitle(slot)}
             onMouseEnter={() => setHovered(index)}
           />
         ))}
@@ -164,72 +180,77 @@ function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour12: false })
 }
 
+function buildEmptyTimeline(intervalMinutes = 3, slots = 80, now = Date.now()): TimelineSlot[] {
+  const intervalMs = intervalMinutes * 60 * 1000
+  const windowEnd = Math.ceil(now / intervalMs) * intervalMs
+  const windowStart = windowEnd - slots * intervalMs
+  return Array.from({ length: slots }, (_, index) => {
+    const start = windowStart + index * intervalMs
+    return { active: false, start, end: start + intervalMs, sample: null }
+  })
+}
+
+function lastSampleInWindow(sorted: HistorySample[], slotStart: number, slotEnd: number) {
+  let sample: HistorySample | null = null
+  for (const item of sorted) {
+    if (item.t < slotStart) continue
+    if (item.t >= slotEnd) break
+    sample = item
+  }
+  return sample
+}
+
+function nearestSampleBefore(sorted: HistorySample[], slotEnd: number) {
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const item = sorted[i]
+    if (item.t <= slotEnd) return item
+  }
+  return null
+}
+
 export function buildAvailabilityTimeline(
-  history: HistorySample[],
+  resourceHistory: HistorySample[],
+  tcpHistory: HistorySample[] = [],
   online: boolean,
   intervalMinutes = 3,
   slots = 80,
   now = Date.now(),
-  fallbackHistory: HistorySample[] = [],
 ): TimelineSlot[] {
   const intervalMs = intervalMinutes * 60 * 1000
-  const sorted = [...history].sort((a, b) => a.t - b.t)
-  const fallbackSorted = [...fallbackHistory].sort((a, b) => a.t - b.t)
+  const resources = [...resourceHistory].sort((a, b) => a.t - b.t)
+  const tcp = [...tcpHistory].sort((a, b) => a.t - b.t)
   const windowEnd = Math.ceil(now / intervalMs) * intervalMs
   const windowStart = windowEnd - slots * intervalMs
-  let cursor = 0
+  const latestResource = resources.at(-1) ?? null
 
   return Array.from({ length: slots }, (_, index) => {
     const slotStart = windowStart + index * intervalMs
     const slotEnd = slotStart + intervalMs
-    let active = false
-    let lastSample: HistorySample | null = null
-    let fallbackSample: HistorySample | null = null
+    const resourceInSlot = lastSampleInWindow(resources, slotStart, slotEnd)
+    const tcpInSlot = lastSampleInWindow(tcp, slotStart, slotEnd)
+    const resourceBefore = nearestSampleBefore(resources, slotEnd)
 
-    while (cursor < sorted.length && sorted[cursor].t < slotStart) cursor++
+    const hasResource = hasResourceSignal(resourceInSlot)
+    const hasTcp = Boolean(tcpInSlot)
+    let active = hasResource || hasTcp
+    let sample = hasResource
+      ? resourceInSlot
+      : hasTcp
+        ? mergeSamples(tcpInSlot, resourceBefore)
+        : null
 
-    let probe = cursor
-    while (probe < sorted.length && sorted[probe].t < slotEnd) {
+    if (!active && index === slots - 1 && online && latestResource) {
       active = true
-      lastSample = sorted[probe]
-      probe++
+      sample = latestResource
     }
 
-    for (let i = fallbackSorted.length - 1; i >= 0; i--) {
-      const item = fallbackSorted[i]
-      if (item.t < slotStart) break
-      if (item.t < slotEnd) {
-        fallbackSample = item
-        break
-      }
-    }
-
-    if (!fallbackSample) {
-      for (let i = fallbackSorted.length - 1; i >= 0; i--) {
-        const item = fallbackSorted[i]
-        if (item.t <= slotEnd) {
-          fallbackSample = item
-          break
-        }
-      }
-    }
-
-    if (!active && index === slots - 1 && online && sorted.length) {
-      active = true
-      lastSample = sorted.at(-1) ?? null
-    }
-
-    if (active && isSampleEmpty(lastSample)) {
-      lastSample = mergeSamples(lastSample, fallbackSample)
-    } else if (!lastSample && fallbackSample) {
-      lastSample = fallbackSample
-    }
+    if (active && isSampleEmpty(sample)) sample = mergeSamples(sample, resourceBefore)
 
     return {
       active,
       start: slotStart,
       end: slotEnd,
-      sample: lastSample,
+      sample,
     }
   })
 }

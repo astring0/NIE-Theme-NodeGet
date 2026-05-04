@@ -85,7 +85,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     node?.source ?? null,
     node?.uuid ?? null,
   )
-  const { tcpData: availabilityTcpData } = useNodeTcpLatency(
+  const { tcpData: availabilityTcpData, loading: availabilityLoading } = useNodeTcpLatency(
     pool,
     node?.source ?? null,
     node?.uuid ?? null,
@@ -197,6 +197,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
           <OnlineStatusBar
             history={history}
             serverHistory={serverHistory}
+            loading={availabilityLoading}
             online={node.online}
             intervalMinutes={3}
             slots={onlineSlots}
