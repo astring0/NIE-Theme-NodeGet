@@ -15,9 +15,8 @@ build 完是纯静态站 丢哪都行
 
 ## 一键部署
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/NodeSeekDev/NodeGet-StatusShow&env=SITE_1,SITE_NAME,SITE_LOGO,SITE_FOOTER&envDescription=站点信息和主控连接&envLink=https://github.com/NodeSeekDev/NodeGet-StatusShow%23环境变量)
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/NodeSeekDev/NodeGet-StatusShow)
+Fork本仓库 修改public/config.json 然后再cloudflare pages / vercel 直接摁部署 绑定域名
+要更新就在GitHub仓库摁 sync就行
 
 # 环境变量
 
