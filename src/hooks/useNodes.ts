@@ -52,6 +52,7 @@ const META_KEYS = [
 ]
 const DYN_INTERVAL_MS = 2000
 const HISTORY_LIMIT = 3600
+const HISTORY_CACHE_KEY = 'nodeget.history.cache.v11'
 
 function emptyMeta(): NodeMeta {
   return {
@@ -112,10 +113,26 @@ function sampleFrom(row: DynamicSummary): HistorySample {
   }
 }
 
+function loadHistoryCache() {
+  if (typeof window === 'undefined') return new Map<string, HistorySample[]>()
+  try {
+    const raw = sessionStorage.getItem(HISTORY_CACHE_KEY)
+    if (!raw) return new Map<string, HistorySample[]>()
+    const parsed = JSON.parse(raw) as Record<string, HistorySample[]>
+    const map = new Map<string, HistorySample[]>()
+    for (const [k, list] of Object.entries(parsed || {})) {
+      if (Array.isArray(list)) map.set(k, list.filter(item => item && typeof item.t === 'number').slice(-HISTORY_LIMIT))
+    }
+    return map
+  } catch {
+    return new Map<string, HistorySample[]>()
+  }
+}
+
 export function useNodes(config: SiteConfig | null) {
   const [agents, setAgents] = useState<Map<string, Agent>>(new Map())
   const [live, setLive] = useState<Map<string, DynamicSummary>>(new Map())
-  const [history, setHistory] = useState<Map<string, HistorySample[]>>(new Map())
+  const [history, setHistory] = useState<Map<string, HistorySample[]>>(loadHistoryCache)
   const [errors, setErrors] = useState<BackendError[]>([])
   const [loading, setLoading] = useState(true)
   const [tick, setTick] = useState(0)
@@ -238,6 +255,15 @@ export function useNodes(config: SiteConfig | null) {
       pool.close()
     }
   }, [config])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const payload: Record<string, HistorySample[]> = {}
+      for (const [uuid, list] of history) payload[uuid] = list.slice(-HISTORY_LIMIT)
+      sessionStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify(payload))
+    } catch {}
+  }, [history])
 
   const nodes = useMemo(() => {
     const now = Date.now()

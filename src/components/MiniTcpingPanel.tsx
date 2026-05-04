@@ -2,11 +2,11 @@ import { Activity } from 'lucide-react'
 import { useMemo } from 'react'
 import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
 import { cn } from '../utils/cn'
-import { extractLatencyValue, latencySeriesName } from '../utils/latency'
+import { extractLatencyValue, latencySeriesName, qualitySegmentColor } from '../utils/latency'
 import type { BackendPool } from '../api/pool'
 import type { Node, TaskQueryResult } from '../types'
 
-const SEGMENTS = 44
+const SEGMENTS = 22
 const NAME_ORDER = ['电信', '联通', '移动']
 
 interface Props {
@@ -28,22 +28,22 @@ export function MiniTcpingPanel({ node, pool }: Props) {
   const series = useMemo(() => summarizeTcping(tcpData), [tcpData])
 
   return (
-    <div className="hidden md:block rounded-[20px] border border-dashed border-border bg-secondary/30 px-3 py-2.5">
-      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-black text-muted-foreground">
+    <div className="hidden md:block rounded-[22px] border border-dashed border-border bg-secondary/28 px-4 py-3.5 mt-1">
+      <div className="mb-3 flex items-center gap-1.5 text-xs font-black text-muted-foreground">
         <Activity className="h-3.5 w-3.5 text-primary" />
         <span>三网 TCPing</span>
         {loading && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />}
       </div>
 
       {series.length > 0 ? (
-        <div className="space-y-1.5">
+        <div className="space-y-3">
           {series.slice(0, 3).map(item => (
             <TcpingRow key={item.name} item={item} />
           ))}
         </div>
       ) : (
-        <div className="flex h-[76px] items-center justify-center rounded-xl border border-dashed border-border/80 px-3 text-center text-[11px] font-bold text-muted-foreground">
-          {loading ? '读取 TCPing…' : error ? `TCPing 查询失败：${error}` : '暂无 TCPing 数据'}
+        <div className="flex min-h-[92px] items-center justify-center rounded-xl border border-dashed border-border/80 px-4 text-center text-[11px] font-bold text-muted-foreground leading-5">
+          {loading ? '读取 TCPing…' : error ? simplifyError(error) : '暂无 TCPing 数据'}
         </div>
       )}
     </div>
@@ -52,21 +52,21 @@ export function MiniTcpingPanel({ node, pool }: Props) {
 
 function TcpingRow({ item }: { item: SeriesSummary }) {
   return (
-    <div className="grid grid-cols-[52px_minmax(0,1fr)_52px] items-center gap-2 text-[10px]">
+    <div className="grid grid-cols-[44px_minmax(0,1fr)_58px] items-center gap-3 text-[11px]">
       <div className="truncate font-black text-muted-foreground" title={item.name}>{item.label}</div>
-      <div className="flex h-4 items-stretch gap-[1px] overflow-hidden rounded-sm bg-border/60 px-[1px] py-[1px]">
+      <div className="flex h-5 items-stretch gap-[2px] overflow-hidden rounded-md bg-border/55 px-1 py-1">
         {item.values.map((v, i) => (
           <span
             key={i}
             className="block flex-1 rounded-[1px]"
-            style={{ backgroundColor: segmentColor(v) }}
+            style={{ backgroundColor: qualitySegmentColor(v) }}
             title={`${item.label} ${v == null ? '丢包/无数据' : `${v.toFixed(1)} ms`}`}
           />
         ))}
       </div>
-      <div className="text-right font-mono leading-tight">
-        <div className="font-black text-foreground/85">{item.avg == null ? '—' : `${item.avg.toFixed(0)}ms`}</div>
-        <div className={cn('text-[9px]', item.lossRate >= 10 ? 'text-rose-500' : 'text-muted-foreground')}>
+      <div className="text-right font-mono leading-[1.15]">
+        <div className="font-black text-foreground/90">{item.avg == null ? '—' : `${item.avg.toFixed(0)}ms`}</div>
+        <div className={cn('mt-0.5 text-[10px]', item.lossRate >= 10 ? 'text-rose-500' : 'text-muted-foreground')}>
           {item.lossRate.toFixed(0)}%
         </div>
       </div>
@@ -122,10 +122,10 @@ function providerRank(name: string) {
   return idx === -1 ? 99 : idx
 }
 
-function segmentColor(v: number | null) {
-  if (v == null) return '#f43f5e'
-  if (v <= 80) return '#42b983'
-  if (v <= 160) return '#facc15'
-  if (v <= 260) return '#fb923c'
-  return '#ef4444'
+function simplifyError(error: string) {
+  const lower = error.toLowerCase()
+  if (lower.includes('permission denied') || lower.includes('insufficient permissions')) {
+    return '当前 Token 没有 Task 读取权限'
+  }
+  return `TCPing 查询失败：${error}`
 }

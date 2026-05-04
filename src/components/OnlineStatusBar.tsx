@@ -1,5 +1,6 @@
 import { Activity } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { cn } from '../utils/cn'
 import { bytes, pct } from '../utils/format'
 import type { HistorySample } from '../types'
@@ -12,6 +13,7 @@ interface OnlineStatusBarProps {
   slots?: number
   title?: string
   subtitle?: string
+  mobileHalf?: boolean
 }
 
 interface TimelineSlot {
@@ -29,10 +31,13 @@ export function OnlineStatusBar({
   slots = 80,
   title = '在线状态',
   subtitle,
+  mobileHalf = true,
 }: OnlineStatusBarProps) {
+  const isMobile = useIsMobile()
+  const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
   const timeline = useMemo(
-    () => buildAvailabilityTimeline(history, online, intervalMinutes, slots),
-    [history, online, intervalMinutes, slots],
+    () => buildAvailabilityTimeline(history, online, intervalMinutes, effectiveSlots),
+    [history, online, intervalMinutes, effectiveSlots],
   )
   const activeCount = timeline.filter(item => item.active).length
   const availability = timeline.length ? (activeCount / timeline.length) * 100 : 0
@@ -70,7 +75,7 @@ export function OnlineStatusBar({
           <span
             key={index}
             className={cn(
-              'block flex-1 cursor-default transition-all duration-200',
+              'block flex-1 cursor-default transition-colors duration-200',
               compact ? 'h-7 sm:h-7' : 'h-8 sm:h-8',
               slot.active
                 ? 'bg-primary shadow-[0_0_0_1px_rgba(66,185,131,0.09)]'
@@ -146,7 +151,8 @@ export function buildAvailabilityTimeline(
 ): TimelineSlot[] {
   const intervalMs = intervalMinutes * 60 * 1000
   const sorted = [...history].sort((a, b) => a.t - b.t)
-  const windowStart = now - slots * intervalMs
+  const windowEnd = Math.ceil(now / intervalMs) * intervalMs
+  const windowStart = windowEnd - slots * intervalMs
   let cursor = 0
 
   return Array.from({ length: slots }, (_, index) => {

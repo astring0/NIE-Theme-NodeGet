@@ -29,6 +29,14 @@ export function latencyColor(name: string) {
   return COLORS[h % COLORS.length]
 }
 
+export function qualitySegmentColor(v: number | null) {
+  if (v == null) return '#ef4444'
+  if (v <= 80) return '#84cc16'
+  if (v <= 160) return '#eab308'
+  if (v <= 260) return '#fb923c'
+  return '#ef4444'
+}
+
 export function normalizeTs(ts: number) {
   return ts < 1_000_000_000_000 ? ts * 1000 : ts
 }
@@ -73,11 +81,9 @@ export function extractLatencyValue(row: TaskQueryResult, type: LatencyType): nu
   const result = row.task_event_result
   if (!result) return null
 
-  const direct = result[type]
+  const direct = (result as Record<string, unknown>)[type]
   if (typeof direct === 'number') return Number.isFinite(direct) ? direct : null
 
-  // 原版只认 task_event_result[type]，这里保留这个优先级；
-  // 只在不同后端/插件返回嵌套对象时再做兜底读取。
   const directNested = readNumber(direct)
   if (directNested != null) return directNested
 
@@ -147,35 +153,52 @@ export interface LatencyStats {
   lossRate: number
 }
 
-export function computeLatencyStats(rows: TaskQueryResult[], type: LatencyType): LatencyStats[] {
-  const stats = seriesNames(rows, type).map<LatencyStats>(name => {
-    const list = rows.filter(r => latencySeriesName(r, type) === name)
-    const vals: number[] = []
-    for (const r of list) {
-      const v = extractLatencyValue(r, type)
-      if (v != null) vals.push(v)
-    }
+export interface LatencyQualityRow extends LatencyStats {
+  values: (number | null)[]
+}
 
-    const color = latencyColor(name)
-    const lossRate = list.length ? ((list.length - vals.length) / list.length) * 100 : 0
-    if (!vals.length) return { name, color, avg: null, jitter: null, lossRate }
-
-    const avg = vals.reduce((s, v) => s + v, 0) / vals.length
-    const jitter =
-      vals.length >= 2
+export function buildLatencyQualityRows(
+  rows: TaskQueryResult[],
+  type: LatencyType,
+  segments = 72,
+): LatencyQualityRow[] {
+  return seriesNames(rows, type)
+    .map<LatencyQualityRow>(name => {
+      const list = rows.filter(r => latencySeriesName(r, type) === name)
+      const values = list.slice(-segments).map(r => extractLatencyValue(r, type))
+      while (values.length < segments) values.unshift(null)
+      const vals = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
+      const lossRate = values.length ? ((values.length - vals.length) / values.length) * 100 : 0
+      const avg = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
+      const jitter = vals.length >= 2
         ? vals.slice(1).reduce((s, v, i) => s + Math.abs(v - vals[i]), 0) / (vals.length - 1)
         : null
+      return {
+        name,
+        color: latencyColor(name),
+        avg,
+        jitter,
+        lossRate,
+        values,
+      }
+    })
+    .sort((a, b) => {
+      const av = a.avg ?? Infinity
+      const bv = b.avg ?? Infinity
+      if (av !== bv) return av - bv
+      const aj = a.jitter ?? Infinity
+      const bj = b.jitter ?? Infinity
+      if (aj !== bj) return aj - bj
+      return a.lossRate - b.lossRate
+    })
+}
 
-    return { name, color, avg, jitter, lossRate }
-  })
-
-  return stats.sort((a, b) => {
-    const av = a.avg ?? Infinity
-    const bv = b.avg ?? Infinity
-    if (av !== bv) return av - bv
-    const aj = a.jitter ?? Infinity
-    const bj = b.jitter ?? Infinity
-    if (aj !== bj) return aj - bj
-    return a.lossRate - b.lossRate
-  })
+export function computeLatencyStats(rows: TaskQueryResult[], type: LatencyType): LatencyStats[] {
+  return buildLatencyQualityRows(rows, type, 72).map(({ name, color, avg, jitter, lossRate }) => ({
+    name,
+    color,
+    avg,
+    jitter,
+    lossRate,
+  }))
 }

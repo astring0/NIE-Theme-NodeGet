@@ -23,10 +23,12 @@ import { cycleProgress, hasCost, remainingDays, remainingValue } from '../utils/
 import { cn } from '../utils/cn'
 import {
   buildLatencyChart,
-  computeLatencyStats,
-  type LatencyStats,
+  buildLatencyQualityRows,
+  qualitySegmentColor,
+  type LatencyQualityRow,
 } from '../utils/latency'
 import { useNodeLatency } from '../hooks/useNodeLatency'
+import { useIsMobile } from '../hooks/useIsMobile'
 import type { BackendPool } from '../api/pool'
 import type { HistorySample, LatencyType, Node, NodeMeta, TaskQueryResult } from '../types'
 
@@ -75,6 +77,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     return () => el.removeEventListener('scroll', onScroll)
   }, [node])
 
+  const isMobile = useIsMobile()
   const { pingData, tcpData, loading: latencyLoading, error: latencyError } = useNodeLatency(
     pool,
     node?.source ?? null,
@@ -98,11 +101,12 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
       : null
   const history = node.history || []
   const trendHistory = history.slice(-120)
+  const onlineSlots = isMobile ? 40 : 80
 
   return (
     <div
       ref={scrollRef}
-      className="fixed inset-0 z-50 bg-background overflow-y-auto animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 bg-background overflow-y-auto"
     >
       <div
         ref={headerRef}
@@ -186,9 +190,9 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
             history={history}
             online={node.online}
             intervalMinutes={3}
-            slots={80}
+            slots={onlineSlots}
             title="在线状态"
-            subtitle="每格 3 分钟，共 80 格"
+            subtitle={`每格 3 分钟，共 ${onlineSlots} 格`}
           />
         </Section>
 
@@ -362,8 +366,12 @@ interface LatencyBlockProps {
 const ms = (v: number) => `${v.toFixed(1)} ms`
 
 function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) {
+  const isMobile = useIsMobile()
   const { data, series } = useMemo(() => buildLatencyChart(rows, type), [rows, type])
-  const stats = useMemo(() => computeLatencyStats(rows, type), [rows, type])
+  const qualityRows = useMemo(
+    () => buildLatencyQualityRows(rows, type, isMobile ? 48 : 84),
+    [rows, type, isMobile],
+  )
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
   const empty = data.length === 0
 
@@ -381,8 +389,10 @@ function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) 
     <Section title={`${title} · 近 1 小时`}>
       <div className="relative h-60">
         {empty && (
-          <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-xs text-muted-foreground">
-            {loading ? '加载中…' : error ? `Task 查询失败：${error}` : `暂无 ${type} 数据`}
+          <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-center">
+            <div className="max-w-[560px] rounded-xl border border-dashed border-border bg-secondary/30 px-5 py-3 text-center text-xs leading-5 text-muted-foreground">
+              {loading ? '加载中…' : error ? simplifyTaskError(error) : `暂无 ${type} 数据`}
+            </div>
           </div>
         )}
         {!empty && (
@@ -429,21 +439,23 @@ function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) 
         )}
       </div>
 
-      {stats.length > 0 && (
-        <div className="mt-3 border-t pt-3">
-          <div className="flex items-center px-2 pb-1 text-[11px] text-muted-foreground">
-            <span className="flex-1">来源</span>
-            <span className="w-20 text-right">平均延迟</span>
-            <span className="w-16 text-right">抖动</span>
-            <span className="w-14 text-right">丢包率</span>
+      {qualityRows.length > 0 && (
+        <div className="mt-4 border-t pt-4">
+          <div className="hidden md:grid grid-cols-[minmax(0,170px)_minmax(0,1fr)_110px_90px_80px] items-center gap-4 px-2 pb-2 text-[11px] text-muted-foreground">
+            <span>来源</span>
+            <span>质量</span>
+            <span className="text-right">平均延迟</span>
+            <span className="text-right">抖动</span>
+            <span className="text-right">丢包率</span>
           </div>
-          <div className="space-y-0.5">
-            {stats.map(s => (
-              <LatencyStatsRow
-                key={s.name}
-                stat={s}
-                hidden={hidden.has(s.name)}
-                onToggle={() => toggle(s.name)}
+          <div className="space-y-1.5">
+            {qualityRows.map(row => (
+              <LatencyQualityView
+                key={row.name}
+                row={row}
+                hidden={hidden.has(row.name)}
+                compact={isMobile}
+                onToggle={() => toggle(row.name)}
               />
             ))}
           </div>
@@ -453,48 +465,78 @@ function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) 
   )
 }
 
-function LatencyStatsRow({
-  stat,
+function LatencyQualityView({
+  row,
   hidden,
+  compact,
   onToggle,
 }: {
-  stat: LatencyStats
+  row: LatencyQualityRow
   hidden: boolean
+  compact: boolean
   onToggle: () => void
 }) {
-  const { name, color, avg, jitter, lossRate } = stat
+  const { name, color, avg, jitter, lossRate, values } = row
+
+  if (compact) {
+    return (
+      <div
+        onClick={onToggle}
+        className={cn(
+          'rounded-xl border border-dashed border-border px-3 py-3 text-xs cursor-pointer transition-opacity active:bg-secondary/30',
+          hidden && 'opacity-35',
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-0.5 w-4 rounded-full shrink-0" style={{ background: color }} />
+          <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+          <span className="font-mono text-foreground/90">{avg != null ? ms(avg) : '—'}</span>
+        </div>
+        <div className="mt-2 flex h-5 items-stretch gap-[1px] overflow-hidden rounded-md bg-border/55 p-1">
+          {values.map((v, i) => (
+            <span key={i} className="block flex-1 rounded-[1px]" style={{ backgroundColor: qualitySegmentColor(v) }} />
+          ))}
+        </div>
+        <div className="mt-2 flex justify-end gap-4 text-[11px] text-muted-foreground font-mono">
+          <span>抖动 {jitter != null ? ms(jitter) : '—'}</span>
+          <span className={cn(lossRate >= 5 && 'text-red-500 font-medium')}>丢包 {lossRate.toFixed(1)}%</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
       onClick={onToggle}
       className={cn(
-        'flex items-center px-2 py-1 rounded-md text-xs cursor-pointer select-none transition-opacity hover:bg-muted/60',
+        'grid grid-cols-[minmax(0,170px)_minmax(0,1fr)_110px_90px_80px] items-center gap-4 rounded-xl px-2 py-2 text-xs cursor-pointer select-none transition-opacity hover:bg-muted/45',
         hidden && 'opacity-35',
       )}
     >
-      <span className="flex items-center gap-2 flex-1 min-w-0">
-        <span
-          className="inline-block w-4 h-0.5 rounded-full shrink-0"
-          style={{ background: color }}
-        />
+      <span className="flex items-center gap-2 min-w-0">
+        <span className="inline-block w-4 h-0.5 rounded-full shrink-0" style={{ background: color }} />
         <span className="truncate">{name}</span>
       </span>
-      <span className="w-20 text-right tabular-nums font-mono">
-        {avg != null ? ms(avg) : '—'}
-      </span>
-      <span className="w-16 text-right tabular-nums font-mono">
-        {jitter != null ? ms(jitter) : '—'}
-      </span>
-      <span
-        className={cn(
-          'w-14 text-right tabular-nums font-mono',
-          lossRate >= 5 && 'text-red-500 font-medium',
-        )}
-      >
+      <div className="flex h-5 items-stretch gap-[1px] overflow-hidden rounded-md bg-border/55 p-1">
+        {values.map((v, i) => (
+          <span key={i} className="block flex-1 rounded-[1px]" style={{ backgroundColor: qualitySegmentColor(v) }} />
+        ))}
+      </div>
+      <span className="text-right tabular-nums font-mono">{avg != null ? ms(avg) : '—'}</span>
+      <span className="text-right tabular-nums font-mono">{jitter != null ? ms(jitter) : '—'}</span>
+      <span className={cn('text-right tabular-nums font-mono', lossRate >= 5 && 'text-red-500 font-medium')}>
         {lossRate.toFixed(1)}%
       </span>
     </div>
   )
+}
+
+function simplifyTaskError(error: string) {
+  const lower = error.toLowerCase()
+  if (lower.includes('permission denied') || lower.includes('insufficient permissions')) {
+    return '当前 Token 没有 Task 读取权限，无法展示该图表。'
+  }
+  return `Task 查询失败：${error}`
 }
 
 function CostSection({ meta }: { meta: NodeMeta }) {
