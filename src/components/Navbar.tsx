@@ -41,13 +41,13 @@ export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onS
   return (
     <header
       ref={headerRef}
-      className={`sticky top-0 z-10 transition-[background-color,backdrop-filter,border-color] duration-200 ${
+      className={`sticky top-0 z-50 transition-[background-color,backdrop-filter,border-color] duration-200 ${
         stuck
           ? 'border-b border-dashed border-border bg-background/90 backdrop-blur'
           : 'border-b border-dashed border-border/70 bg-background/70 backdrop-blur-sm'
       }`}
     >
-      <div className="max-w-6xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 py-3 overflow-hidden">
+      <div className="max-w-6xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 py-3 overflow-visible">
         <a
           href="./"
           className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3 transition-opacity hover:opacity-80 overflow-hidden"
