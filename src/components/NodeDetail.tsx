@@ -379,11 +379,11 @@ function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) 
   const isMobile = useIsMobile()
   const { data, series } = useMemo(() => buildLatencyChart(rows, type), [rows, type])
   const qualityRows = useMemo(
-    () => buildLatencyQualityRows(rows, type, isMobile ? 48 : 84),
+    () => buildLatencyQualityRows(rows, type, isMobile ? 30 : 60),
     [rows, type, isMobile],
   )
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
-  const empty = data.length === 0
+  const empty = series.length === 0
 
   const visibleSeries = series.filter(s => !hidden.has(s.name))
 

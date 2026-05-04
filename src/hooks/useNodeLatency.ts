@@ -6,8 +6,9 @@ import type { BackendPool } from '../api/pool'
 import type { LatencyType, TaskQueryResult } from '../types'
 
 const WINDOW_MS = 60 * 60 * 1000
-const REFRESH_MS = 10_000
+const REFRESH_MS = 30_000
 const QUERY_TIMEOUT_MS = 20_000
+const CACHE_LIMIT = 5000
 
 export interface LatencyQueryState {
   pingData: TaskQueryResult[]
@@ -16,10 +17,34 @@ export interface LatencyQueryState {
   error: string | null
 }
 
+const latencyCache = new Map<string, TaskQueryResult[]>()
+
+function cacheKey(source: string, uuid: string, type: LatencyType) {
+  return `${source}::${uuid}::${type}`
+}
+
 function clean(rows: TaskQueryResult[] | undefined): TaskQueryResult[] {
   return (rows ?? [])
     .filter(r => r.cron_source && r.cron_source !== '未知')
     .sort((a, b) => normalizeTs(a.timestamp) - normalizeTs(b.timestamp))
+}
+
+export function getLatencyCache(source: string | null, uuid: string | null, type: LatencyType, windowMs = WINDOW_MS) {
+  if (!source || !uuid) return []
+  const cutoff = Date.now() - windowMs
+  return (latencyCache.get(cacheKey(source, uuid, type)) || []).filter(row => normalizeTs(row.timestamp) >= cutoff)
+}
+
+export function setLatencyCache(source: string, uuid: string, type: LatencyType, rows: TaskQueryResult[]) {
+  const key = cacheKey(source, uuid, type)
+  const merged = new Map<string, TaskQueryResult>()
+  for (const row of latencyCache.get(key) || []) {
+    merged.set(`${normalizeTs(row.timestamp)}:${row.cron_source || ''}:${row.success ? 1 : 0}`, row)
+  }
+  for (const row of rows) {
+    merged.set(`${normalizeTs(row.timestamp)}:${row.cron_source || ''}:${row.success ? 1 : 0}`, row)
+  }
+  latencyCache.set(key, clean([...merged.values()]).slice(-CACHE_LIMIT))
 }
 
 export async function fetchLatencyRows(
@@ -32,9 +57,7 @@ export async function fetchLatencyRows(
   const now = Date.now()
   const window: [number, number] = [now - windowMs, now]
 
-  // 这里刻意保持和原版 StatusShow 一样的 task_query 参数格式。
-  // 部分 NodeGet 后端版本不支持把 uuid / timestamp / type / limit 合并进同一个 condition 对象，
-  // 也不支持 limit 条件；一旦加了这些，接口会返回空或报错，导致延迟图表完全不显示。
+  // 保持和官方 StatusShow 兼容的 task_query 条件格式。
   return clean(
     await taskQuery(
       client,
@@ -49,14 +72,14 @@ export function useNodeLatency(
   source: string | null,
   uuid: string | null,
 ): LatencyQueryState {
-  const [pingData, setPingData] = useState<TaskQueryResult[]>([])
-  const [tcpData, setTcpData] = useState<TaskQueryResult[]>([])
+  const [pingData, setPingData] = useState<TaskQueryResult[]>(() => getLatencyCache(source, uuid, 'ping'))
+  const [tcpData, setTcpData] = useState<TaskQueryResult[]>(() => getLatencyCache(source, uuid, 'tcp_ping'))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setPingData([])
-    setTcpData([])
+    setPingData(getLatencyCache(source, uuid, 'ping'))
+    setTcpData(getLatencyCache(source, uuid, 'tcp_ping'))
     setError(null)
 
     if (!pool || !source || !uuid) return
@@ -75,8 +98,14 @@ export function useNodeLatency(
 
       if (cancelled) return
 
-      if (ping.status === 'fulfilled') setPingData(ping.value)
-      if (tcp.status === 'fulfilled') setTcpData(tcp.value)
+      if (ping.status === 'fulfilled') {
+        setLatencyCache(source, uuid, 'ping', ping.value)
+        setPingData(getLatencyCache(source, uuid, 'ping'))
+      }
+      if (tcp.status === 'fulfilled') {
+        setLatencyCache(source, uuid, 'tcp_ping', tcp.value)
+        setTcpData(getLatencyCache(source, uuid, 'tcp_ping'))
+      }
 
       const messages = [ping, tcp]
         .filter((r): r is PromiseRejectedResult => r.status === 'rejected')

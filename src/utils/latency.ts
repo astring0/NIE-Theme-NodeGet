@@ -23,6 +23,15 @@ const FALLBACK_VALUE_KEYS = [
   'duration',
 ]
 
+export const LATENCY_BUCKET_COLORS = {
+  deepGreen: '#16a34a',
+  lightGreen: '#84cc16',
+  lightYellow: '#fde047',
+  deepYellow: '#f59e0b',
+  lightRed: '#f87171',
+  deepRed: '#dc2626',
+}
+
 export function latencyColor(name: string) {
   let h = 0
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
@@ -30,12 +39,12 @@ export function latencyColor(name: string) {
 }
 
 export function qualitySegmentColor(v: number | null) {
-  if (v == null) return '#dc2626' // 丢包 / 无数据：深红
-  if (v <= 45) return '#16a34a' // <=45ms：深绿
-  if (v <= 90) return '#84cc16' // 45-90ms：浅绿
-  if (v <= 160) return '#fde047' // 90-160ms：浅黄
-  if (v <= 300) return '#f59e0b' // 160-300ms：深黄
-  return '#f87171' // >300ms：浅红
+  if (v == null) return LATENCY_BUCKET_COLORS.deepRed // 丢包 / 无数据：深红
+  if (v <= 45) return LATENCY_BUCKET_COLORS.deepGreen // <=45ms：深绿
+  if (v <= 90) return LATENCY_BUCKET_COLORS.lightGreen // 45-90ms：浅绿
+  if (v <= 160) return LATENCY_BUCKET_COLORS.lightYellow // 90-160ms：浅黄
+  if (v <= 300) return LATENCY_BUCKET_COLORS.deepYellow // 160-300ms：深黄
+  return LATENCY_BUCKET_COLORS.lightRed // >300ms：浅红
 }
 
 export function normalizeTs(ts: number) {
@@ -112,18 +121,96 @@ export interface ChartSeries {
   color: string
 }
 
-function forwardFill(data: ChartPoint[], names: string[]) {
-  const last: Record<string, number | null> = {}
-  for (const n of names) last[n] = null
-  for (const pt of data) {
-    for (const n of names) {
-      const v = pt[n]
-      if (v == null) pt[n] = last[n]
-      else last[n] = v
-    }
-  }
+export interface LatencyStats {
+  name: string
+  color: string
+  avg: number | null
+  jitter: number | null
+  lossRate: number
 }
 
+export interface LatencyQualityRow extends LatencyStats {
+  values: (number | null)[]
+}
+
+export interface LatencyBucketOptions {
+  windowMs?: number
+  bucketMs?: number
+  buckets?: number
+  now?: number
+  includeCurrentBucket?: boolean
+  fillEmptyWithNull?: boolean
+}
+
+interface BucketAgg {
+  success: number[]
+  failed: number
+  total: number
+}
+
+function alignedWindow({ windowMs, bucketMs, buckets, now = Date.now(), includeCurrentBucket = false }: LatencyBucketOptions) {
+  const safeBucketMs = bucketMs ?? (buckets && windowMs ? Math.max(1, Math.floor(windowMs / buckets)) : 60_000)
+  const safeBuckets = buckets ?? (windowMs ? Math.max(1, Math.ceil(windowMs / safeBucketMs)) : 60)
+  const lastCompletedEnd = Math.floor(now / safeBucketMs) * safeBucketMs
+  const windowEnd = includeCurrentBucket ? lastCompletedEnd + safeBucketMs : lastCompletedEnd
+  const windowStart = windowEnd - safeBuckets * safeBucketMs
+  return { bucketMs: safeBucketMs, buckets: safeBuckets, windowStart, windowEnd }
+}
+
+function emptyPoint(t: number, names: string[]): ChartPoint {
+  const pt: ChartPoint = { t }
+  for (const n of names) pt[n] = null
+  return pt
+}
+
+function aggregateRows(rows: TaskQueryResult[], type: LatencyType, options: LatencyBucketOptions = {}) {
+  const names = seriesNames(rows, type)
+  const series: ChartSeries[] = names.map(name => ({ name, color: latencyColor(name) }))
+  const { bucketMs, buckets, windowStart, windowEnd } = alignedWindow(options)
+  const bySeries = new Map<string, BucketAgg[]>()
+
+  for (const name of names) {
+    bySeries.set(
+      name,
+      Array.from({ length: buckets }, () => ({ success: [], failed: 0, total: 0 })),
+    )
+  }
+
+  for (const row of rows) {
+    const t = normalizeTs(row.timestamp)
+    if (t < windowStart || t >= windowEnd) continue
+    const name = latencySeriesName(row, type)
+    const list = bySeries.get(name)
+    if (!list) continue
+    const idx = Math.floor((t - windowStart) / bucketMs)
+    if (idx < 0 || idx >= buckets) continue
+    const bucket = list[idx]
+    bucket.total++
+    const value = extractLatencyValue(row, type)
+    if (value == null) bucket.failed++
+    else bucket.success.push(value)
+  }
+
+  return { names, series, bySeries, bucketMs, buckets, windowStart, windowEnd }
+}
+
+function avg(values: number[]) {
+  return values.length ? values.reduce((s, v) => s + v, 0) / values.length : null
+}
+
+function bucketValue(bucket: BucketAgg, fillEmptyWithNull = true) {
+  if (!bucket.total) return fillEmptyWithNull ? null : undefined
+  return avg(bucket.success)
+}
+
+function jitter(values: number[]) {
+  if (values.length < 2) return null
+  return values.slice(1).reduce((sum, v, i) => sum + Math.abs(v - values[i]), 0) / (values.length - 1)
+}
+
+function lossRateFromValues(values: (number | null)[]) {
+  return values.length ? (values.filter(v => v == null).length / values.length) * 100 : 0
+}
 
 export function latencyRowsToHistory(rows: TaskQueryResult[], type: LatencyType) {
   return rows
@@ -139,62 +226,53 @@ export function latencyRowsToHistory(rows: TaskQueryResult[], type: LatencyType)
     .sort((a, b) => a.t - b.t)
 }
 
-export function buildLatencyChart(rows: TaskQueryResult[], type: LatencyType) {
-  const names = seriesNames(rows, type)
-  const series: ChartSeries[] = names.map(name => ({ name, color: latencyColor(name) }))
-  const byTs = new Map<number, ChartPoint>()
+export function buildLatencyChart(rows: TaskQueryResult[], type: LatencyType, options: LatencyBucketOptions = {}) {
+  const { names, series, bySeries, bucketMs, buckets, windowStart } = aggregateRows(rows, type, {
+    windowMs: 60 * 60 * 1000,
+    bucketMs: 60_000,
+    includeCurrentBucket: false,
+    ...options,
+  })
+  const data = Array.from({ length: buckets }, (_, index) => emptyPoint(windowStart + index * bucketMs + bucketMs / 2, names))
 
-  for (const r of rows) {
-    const t = normalizeTs(r.timestamp)
-    const name = latencySeriesName(r, type)
-    let pt = byTs.get(t)
-    if (!pt) {
-      pt = { t }
-      for (const n of names) pt[n] = null
-      byTs.set(t, pt)
-    }
-    pt[name] = extractLatencyValue(r, type)
+  for (const name of names) {
+    const list = bySeries.get(name) || []
+    list.forEach((bucket, index) => {
+      const value = bucketValue(bucket)
+      data[index][name] = value === undefined ? null : value
+    })
   }
 
-  const data = [...byTs.values()].sort((a, b) => a.t - b.t)
-  forwardFill(data, names)
   return { data, series }
-}
-
-export interface LatencyStats {
-  name: string
-  color: string
-  avg: number | null
-  jitter: number | null
-  lossRate: number
-}
-
-export interface LatencyQualityRow extends LatencyStats {
-  values: (number | null)[]
 }
 
 export function buildLatencyQualityRows(
   rows: TaskQueryResult[],
   type: LatencyType,
   segments = 72,
+  options: LatencyBucketOptions = {},
 ): LatencyQualityRow[] {
-  return seriesNames(rows, type)
+  const { names, bySeries } = aggregateRows(rows, type, {
+    bucketMs: 60_000,
+    buckets: segments,
+    includeCurrentBucket: false,
+    ...options,
+  })
+
+  return names
     .map<LatencyQualityRow>(name => {
-      const list = rows.filter(r => latencySeriesName(r, type) === name)
-      const values = list.slice(-segments).map(r => extractLatencyValue(r, type))
-      while (values.length < segments) values.unshift(null)
-      const vals = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-      const lossRate = values.length ? ((values.length - vals.length) / values.length) * 100 : 0
-      const avg = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null
-      const jitter = vals.length >= 2
-        ? vals.slice(1).reduce((s, v, i) => s + Math.abs(v - vals[i]), 0) / (vals.length - 1)
-        : null
+      const buckets = bySeries.get(name) || []
+      const values = buckets.map(bucket => {
+        const value = bucketValue(bucket)
+        return value === undefined ? null : value
+      })
+      const valid = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
       return {
         name,
         color: latencyColor(name),
-        avg,
-        jitter,
-        lossRate,
+        avg: avg(valid),
+        jitter: jitter(valid),
+        lossRate: lossRateFromValues(values),
         values,
       }
     })

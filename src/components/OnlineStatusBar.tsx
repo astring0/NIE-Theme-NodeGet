@@ -69,7 +69,8 @@ export function OnlineStatusBar({
   const isMobile = useIsMobile()
   const effectiveSlots = mobileHalf && isMobile ? Math.max(1, Math.floor(slots / 2)) : slots
   const resourceHistory = history || []
-  const tcpHistory = serverHistory || []
+  // 资源上报优先。TCPing 只在没有任何资源历史时兜底，不参与覆盖机器在线状态。
+  const tcpHistory = resourceHistory.length ? [] : (serverHistory || [])
   const pendingRemoteHistory = false
   const timeline = useMemo(
     () => buildAvailabilityTimeline(resourceHistory, tcpHistory, online, intervalMinutes, effectiveSlots),
@@ -229,7 +230,7 @@ export function buildAvailabilityTimeline(
     const resourceBefore = nearestSampleBefore(resources, slotEnd)
 
     const hasResource = hasResourceSignal(resourceInSlot)
-    const hasTcp = Boolean(tcpInSlot)
+    const hasTcp = !resources.length && Boolean(tcpInSlot)
     let active = hasResource || hasTcp
     let sample = hasResource
       ? resourceInSlot

@@ -1,11 +1,13 @@
 import { Activity } from 'lucide-react'
 import { useMemo } from 'react'
 import { cn } from '../utils/cn'
-import { extractLatencyValue, latencySeriesName, qualitySegmentColor } from '../utils/latency'
+import { buildLatencyQualityRows, qualitySegmentColor } from '../utils/latency'
 import type { Node, TaskQueryResult } from '../types'
 
 const SEGMENTS = 22
 const NAME_ORDER = ['电信', '联通', '移动']
+const MINI_WINDOW_MS = 22 * 60 * 1000
+const MINI_BUCKET_MS = 60 * 1000
 
 interface Props {
   node: Node
@@ -74,32 +76,20 @@ function TcpingRow({ item }: { item: SeriesSummary }) {
 }
 
 function summarizeTcping(rows: TaskQueryResult[]): SeriesSummary[] {
-  const groups = new Map<string, TaskQueryResult[]>()
-  for (const row of rows) {
-    const name = latencySeriesName(row, 'tcp_ping')
-    if (!groups.has(name)) groups.set(name, [])
-    groups.get(name)!.push(row)
-  }
-
-  return [...groups.entries()]
-    .map(([name, list]) => {
-      const values = list.slice(-SEGMENTS).map(row => extractLatencyValue(row, 'tcp_ping'))
-      while (values.length < SEGMENTS) values.unshift(null)
-      const valid = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-      const avg = valid.length ? valid.reduce((sum, v) => sum + v, 0) / valid.length : null
-      const jitter = valid.length > 1
-        ? valid.slice(1).reduce((sum, v, i) => sum + Math.abs(v - valid[i]), 0) / (valid.length - 1)
-        : null
-      const lossRate = values.length ? ((values.length - valid.length) / values.length) * 100 : 0
-      return {
-        name,
-        label: displayProvider(name),
-        values,
-        avg,
-        jitter,
-        lossRate,
-      }
-    })
+  return buildLatencyQualityRows(rows, 'tcp_ping', SEGMENTS, {
+    windowMs: MINI_WINDOW_MS,
+    bucketMs: MINI_BUCKET_MS,
+    buckets: SEGMENTS,
+    includeCurrentBucket: false,
+  })
+    .map(row => ({
+      name: row.name,
+      label: displayProvider(row.name),
+      values: row.values,
+      avg: row.avg,
+      jitter: row.jitter,
+      lossRate: row.lossRate,
+    }))
     .sort((a, b) => providerRank(a.name) - providerRank(b.name) || (a.avg ?? Infinity) - (b.avg ?? Infinity))
 }
 
