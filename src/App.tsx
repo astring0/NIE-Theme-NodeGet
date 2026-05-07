@@ -199,28 +199,6 @@ export function App() {
   }, [nodes, query, activeTag, activeRegion, sort, regions])
 
   const selectedNode = selected ? nodes.get(selected) || findLegacyNode(nodes, selected) : null
-
-  if (configError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-8">
-        <Alert variant="destructive" className="max-w-lg">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>加载 config.json 失败</AlertTitle>
-          <AlertDescription>{String(configError.message || configError)}</AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
-
-  if (!config) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-        加载中…
-      </div>
-    )
-  }
-
-  const logo = config.site_logo || DEFAULT_LOGO
   const empty = list.length === 0
   const noNodes = nodes.size === 0
   const hasErrors = errors.length > 0
@@ -244,6 +222,28 @@ export function App() {
       window.removeEventListener('resize', update)
     }
   }, [empty, allTags.length, regions.list.length, activeTag, activeRegion])
+
+  if (configError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <Alert variant="destructive" className="max-w-lg">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>加载 config.json 失败</AlertTitle>
+          <AlertDescription>{String(configError.message || configError)}</AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  if (!config) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        加载中…
+      </div>
+    )
+  }
+
+  const logo = config.site_logo || DEFAULT_LOGO
 
   const content = (
     <>
