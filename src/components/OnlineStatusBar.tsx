@@ -144,7 +144,7 @@ function StatusTooltip({ compact, slot, left }: { compact: boolean; slot: Timeli
     slot.reason === 'probe' && !hasMetrics
       ? '该格仅代表在线探测成功，未采集到 CPU / 内存 / 磁盘 数据。'
       : slot.reason === 'merged'
-        ? '该格在线；资源值取自相近时段的最近一次采样。'
+        ? '该格在线；资源值取自最近一次可用资源采样。'
         : null
 
   return (
@@ -219,6 +219,19 @@ function nearestSampleBeforeWithin(sorted: HistorySample[], slotEnd: number, max
   return null
 }
 
+function nearestSampleWithin(sorted: HistorySample[], target: number, maxAgeMs: number) {
+  let best: HistorySample | null = null
+  let bestDt = Infinity
+  for (const item of sorted) {
+    const dt = Math.abs(item.t - target)
+    if (dt < bestDt) {
+      best = item
+      bestDt = dt
+    }
+  }
+  return best && bestDt <= maxAgeMs ? best : null
+}
+
 export function buildAvailabilityTimeline(
   resourceHistory: HistorySample[],
   tcpHistory: HistorySample[] = [],
@@ -240,7 +253,10 @@ export function buildAvailabilityTimeline(
     const slotEnd = slotStart + intervalMs
     const resourceInSlot = lastSampleInWindow(resources, slotStart, slotEnd)
     const tcpInSlot = lastSampleInWindow(tcp, slotStart, slotEnd)
-    const nearbyResource = nearestSampleBeforeWithin(resources, slotEnd, intervalMs * 2)
+    const mergeWindowMs = hasRemoteHistory ? 4 * 60 * 60 * 1000 : intervalMs * 4
+    const nearbyResource =
+      nearestSampleBeforeWithin(resources, slotEnd, mergeWindowMs) ||
+      nearestSampleWithin(resources, (slotStart + slotEnd) / 2, mergeWindowMs)
 
     let active = false
     let sample: HistorySample | null = null
@@ -266,6 +282,14 @@ export function buildAvailabilityTimeline(
       active = Boolean(resourceInSlot && hasResourceSignal(resourceInSlot))
       sample = active ? resourceInSlot : null
       reason = active ? 'resource' : 'empty'
+
+      // 隐私模式 / 首次访问时没有本地历史；如果节点当前在线且有最新资源采样，
+      // 用最近采样补足近期格子，避免只有最后一格有 CPU / 内存 / 磁盘。
+      if (!active && online && hasResourceSignal(latestResource) && resources.length <= 2) {
+        active = true
+        sample = latestResource
+        reason = index === slots - 1 ? 'resource' : 'merged'
+      }
 
       if (!active && index === slots - 1 && online && hasResourceSignal(latestResource)) {
         active = true

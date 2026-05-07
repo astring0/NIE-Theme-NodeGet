@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from './components/ui/alert'
 import { useConfig } from './hooks/useConfig'
@@ -81,6 +81,8 @@ export function App() {
   const [activeRegion, setActiveRegion] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(readHash)
   const [backgroundSettings, setBackgroundSettings] = useState<BackgroundSettings>(initialBackgroundSettings)
+  const filtersRef = useRef<HTMLDivElement | null>(null)
+  const [sidebarOffset, setSidebarOffset] = useState(0)
 
   useEffect(() => {
     localStorage.setItem(VIEW_KEY, view)
@@ -223,6 +225,26 @@ export function App() {
   const noNodes = nodes.size === 0
   const hasErrors = errors.length > 0
 
+  useEffect(() => {
+    if (empty) {
+      setSidebarOffset(0)
+      return
+    }
+    const el = filtersRef.current
+    if (!el) return
+
+    const update = () => setSidebarOffset(el.offsetHeight + 24)
+    update()
+
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null
+    ro?.observe(el)
+    window.addEventListener('resize', update)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [empty, allTags.length, regions.list.length, activeTag, activeRegion])
+
   const content = (
     <>
       {empty && loading && (
@@ -284,18 +306,21 @@ export function App() {
           onBackgroundSettingsChange={setBackgroundSettings}
         />
 
-        <main className="flex-1 w-full px-4 py-4 sm:px-6 sm:py-6">
+        <main className="flex-1 w-full px-4 pb-4 pt-[6.25rem] sm:px-6 sm:pb-6 sm:pt-[6.75rem]">
           <div className="mx-auto w-full max-w-[91.5rem]">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[18rem_minmax(0,72rem)] xl:justify-center xl:items-start">
               {!empty && (
-                <aside className="order-1 xl:order-1">
+                <aside
+                  className="sidebar-offset order-1 xl:order-1"
+                  style={{ ['--sidebar-offset' as string]: `${sidebarOffset}px` }}
+                >
                   <ValueSidebar nodes={list} />
                 </aside>
               )}
 
               <section className={`order-2 xl:order-2 min-w-0 space-y-6 ${empty ? 'xl:col-span-2 xl:mx-auto xl:w-full xl:max-w-6xl' : ''}`}>
                 {!empty && (
-                  <div className="space-y-3">
+                  <div ref={filtersRef} className="space-y-3">
                     <RegionFilter
                       regions={regions.list}
                       total={regions.total}

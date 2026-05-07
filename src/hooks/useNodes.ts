@@ -345,9 +345,15 @@ export function useNodes(config: SiteConfig | null) {
       }
       setAgents(seed)
 
-      await Promise.all(pool.entries.map(entry => applyMetaAndStatic(entry, sourceUuids.get(entry.name) || [])))
+      // 先拉动态数据，让 CPU / 内存 / 硬盘尽快显示；元数据和静态信息异步补齐。
+      const metaAndStatic = Promise.all(
+        pool.entries.map(entry => applyMetaAndStatic(entry, sourceUuids.get(entry.name) || [])),
+      )
       await tickDynamic()
       setLoading(false)
+      void metaAndStatic.catch((e: unknown) => {
+        setErrors(prev => [...prev, { source: '*', error: e }])
+      })
     }
 
     bootstrap().catch((e: unknown) => {
