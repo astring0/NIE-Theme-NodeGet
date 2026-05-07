@@ -29,31 +29,50 @@ export class RpcClient {
   private pending = new Map<string, Pending>()
   private outbox: string[] = []
   private closed = false
+  private readyResolve: (() => void) | null = null
+  private readyReject: ((e: Error) => void) | null = null
+  private readyPromise: Promise<void> = Promise.resolve()
   opened: Promise<void>
 
   constructor(url: string, token: string, name?: string) {
     this.url = url
     this.token = token
     this.name = name || url
-
-    this.opened = new Promise<void>((resolve, reject) => {
-      let done = false
-      const ok = () => {
-        if (done) return
-        done = true
-        resolve()
-      }
-      const fail = (msg: string) => {
-        if (done) return
-        done = true
-        reject(new Error(msg))
-      }
-      this.connect(ok, fail)
-    })
+    this.opened = this.waitUntilOpen()
+    this.connect()
   }
 
-  private connect(ok: () => void, fail: (msg: string) => void) {
+  private resetReady() {
+    this.readyPromise = new Promise<void>((resolve, reject) => {
+      this.readyResolve = resolve
+      this.readyReject = reject
+    })
+    this.opened = this.readyPromise
+  }
+
+  private resolveReady() {
+    this.readyResolve?.()
+    this.readyResolve = null
+    this.readyReject = null
+  }
+
+  private rejectReady(error: Error) {
+    this.readyReject?.(error)
+    this.readyResolve = null
+    this.readyReject = null
+  }
+
+  private waitUntilOpen() {
+    if (this.ws?.readyState === WebSocket.OPEN) return Promise.resolve()
+    if (!this.readyResolve && !this.readyReject) this.resetReady()
+    return this.readyPromise
+  }
+
+  private connect() {
     if (this.closed) return
+    if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) return
+
+    this.resetReady()
     const t0 = performance.now()
     log(this.name, 'connecting →', this.url)
 
@@ -64,14 +83,14 @@ export class RpcClient {
     const timer = setTimeout(() => {
       if (opened) return
       ws.close()
-      fail(`连接 ${this.url} 超时`)
+      this.rejectReady(new Error(`连接 ${this.url} 超时`))
     }, CONNECT_TIMEOUT_MS)
 
     ws.onopen = () => {
       opened = true
       clearTimeout(timer)
       log(this.name, `open in ${(performance.now() - t0).toFixed(0)}ms (flush ${this.outbox.length})`)
-      ok()
+      this.resolveReady()
       for (const m of this.outbox) ws.send(m)
       this.outbox = []
     }
@@ -98,14 +117,19 @@ export class RpcClient {
 
     ws.onclose = ev => {
       clearTimeout(timer)
-      this.ws = null
+      if (this.ws === ws) this.ws = null
       if (!opened) {
         warn(this.name, `close before open code=${ev.code}`)
-        fail(`无法连接 ${this.url}`)
+        this.rejectReady(new Error(`无法连接 ${this.url}`))
       } else {
         log(this.name, `close code=${ev.code} pending=${this.pending.size}`)
       }
-      if (!this.closed) setTimeout(() => this.connect(ok, fail), RECONNECT_DELAY_MS)
+      if (!this.closed) {
+        // Important: create a fresh readiness promise before reconnecting.
+        // Otherwise the first failed connection leaves opened/call() permanently rejected.
+        this.resetReady()
+        setTimeout(() => this.connect(), RECONNECT_DELAY_MS)
+      }
     }
 
     ws.onerror = () => warn(this.name, 'ws error')
@@ -116,7 +140,7 @@ export class RpcClient {
     params: Record<string, unknown> = {},
     timeout = CALL_TIMEOUT_MS,
   ): Promise<T> {
-    await this.opened
+    await this.waitUntilOpen()
     const id = nextId()
     const payload = JSON.stringify({
       jsonrpc: '2.0',
@@ -147,6 +171,7 @@ export class RpcClient {
 
   close() {
     this.closed = true
+    this.rejectReady(new Error('connection closed'))
     for (const p of this.pending.values()) {
       clearTimeout(p.timer)
       p.reject(new Error('connection closed'))

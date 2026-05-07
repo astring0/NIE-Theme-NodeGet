@@ -13,7 +13,8 @@ import { WorldMap } from './components/WorldMap'
 import { TagFilter } from './components/TagFilter'
 import { RegionFilter } from './components/RegionFilter'
 import { deriveUsage, displayName } from './utils/derive'
-import type { Sort, View } from './types'
+import type { Node, Sort, View } from './types'
+import { nodeKey } from './utils/nodeKey'
 
 const DEFAULT_LOGO = `${import.meta.env.BASE_URL}logo.png`
 const VIEW_KEY = 'nodeget.view'
@@ -35,9 +36,16 @@ function readHash() {
 
 const num = (v?: number) => (Number.isFinite(v) ? (v as number) : -Infinity)
 
+function findLegacyNode(nodes: Map<string, Node>, uuid: string) {
+  for (const n of nodes.values()) {
+    if (n.uuid === uuid) return n
+  }
+  return null
+}
+
 export function App() {
   const { config, error: configError } = useConfig()
-  const { nodes, errors, pool } = useNodes(config)
+  const { nodes, errors, loading, pool } = useNodes(config)
 
   const [view, setView] = useState<View>(initialView)
   const [sort, setSort] = useState<Sort>(initialSort)
@@ -155,7 +163,7 @@ export function App() {
     })
   }, [nodes, query, activeTag, activeRegion, sort, regions])
 
-  const selectedNode = selected ? nodes.get(selected) || null : null
+  const selectedNode = selected ? nodes.get(selected) || findLegacyNode(nodes, selected) : null
 
   if (configError) {
     return (
@@ -179,6 +187,7 @@ export function App() {
 
   const logo = config.site_logo || DEFAULT_LOGO
   const empty = list.length === 0
+  const noNodes = nodes.size === 0
   const hasErrors = errors.length > 0
 
   return (
@@ -195,7 +204,7 @@ export function App() {
         onSort={setSort}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         {!empty && (
           <RegionFilter
             regions={regions.list}
@@ -206,21 +215,23 @@ export function App() {
         )}
         {!empty && <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />}
 
-        {empty && !hasErrors && (
+        {empty && loading && (
           <div className="py-24 flex flex-col items-center gap-3 text-muted-foreground">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <span className="text-sm">连接后端中…</span>
           </div>
         )}
 
-        {empty && hasErrors && (
-          <div className="py-20 text-center text-muted-foreground">暂无节点</div>
+        {empty && !loading && (
+          <div className="py-20 text-center text-muted-foreground">
+            {noNodes ? '暂无节点' : '没有匹配的节点'}
+          </div>
         )}
 
         {!empty && view === 'cards' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {list.map(n => (
-              <NodeCard key={n.uuid} node={n} />
+              <NodeCard key={nodeKey(n)} node={n} />
             ))}
           </div>
         )}

@@ -8,10 +8,11 @@ import { bytes, pct, relativeAge } from '../utils/format'
 import { deriveUsage, displayName, distroLogo, virtLabel } from '../utils/derive'
 import { cn, loadColor } from '../utils/cn'
 import type { Node } from '../types'
+import { nodeKey } from '../utils/nodeKey'
 
 interface Props {
   nodes: Node[]
-  onOpen?: (uuid: string) => void
+  onOpen?: (id: string) => void
 }
 
 export function NodeTable({ nodes, onOpen }: Props) {
@@ -39,8 +40,8 @@ export function NodeTable({ nodes, onOpen }: Props) {
             const virt = virtLabel(n)
             return (
               <TableRow
-                key={n.uuid}
-                onClick={() => onOpen?.(n.uuid)}
+                key={nodeKey(n)}
+                onClick={() => onOpen?.(nodeKey(n))}
                 className={cn('cursor-pointer', !n.online && 'opacity-60')}
               >
                 <TableCell>

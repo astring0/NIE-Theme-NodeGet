@@ -1,13 +1,17 @@
 import { ArrowDown, ArrowUp, Clock, type LucideIcon } from 'lucide-react'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
-import { Progress } from './ui/progress'
 import { Flag } from './Flag'
+import { OnlineStatusBar } from './OnlineStatusBar'
+import { MiniTcpingPanel } from './MiniTcpingPanel'
+import { ResourceRing } from './ResourceRing'
 import { StatusDot } from './StatusDot'
-import { bytes, pct, relativeAge, uptime } from '../utils/format'
+import { bytes, relativeAge, uptime } from '../utils/format'
 import { cpuLabel, deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
-import { cn, loadColor } from '../utils/cn'
+import { cn } from '../utils/cn'
+import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
 import type { Node } from '../types'
+import { nodeKey } from '../utils/nodeKey'
 import type { ReactNode } from 'react'
 
 export function NodeCard({ node }: { node: Node }) {
@@ -19,104 +23,98 @@ export function NodeCard({ node }: { node: Node }) {
   const cpu = cpuLabel(node)
 
   return (
-      <a href={`#${encodeURIComponent(node.uuid)}`} className="block">
-        <Card
-            className={cn(
-                'p-4 transition hover:border-primary/50 hover:shadow-md flex flex-col gap-3',
-                !node.online && 'opacity-60',
-            )}
-        >
-          <div className="flex items-center gap-2">
-            <StatusDot online={node.online} />
-            {logo && (
-                <img src={logo} alt="" className="w-5 h-5 shrink-0 object-contain" loading="lazy" />
-            )}
-            <span className="font-semibold flex-1 min-w-0 truncate" title={displayName(node)}>
+    <a href={`#${encodeURIComponent(nodeKey(node))}`} className="block h-full">
+      <Card
+        className={cn(
+          'group h-full min-h-[432px] sm:min-h-[500px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 hover:border-primary/90 hover:bg-card hover:shadow-[0_0_0_1px_rgba(66,185,131,0.32),0_12px_28px_rgba(15,23,42,0.06)] flex flex-col gap-3.5 sm:gap-4',
+          !node.online && 'opacity-75',
+        )}
+      >
+        <div className="flex items-center gap-2.5 border-b border-dashed border-border pb-3">
+          <StatusDot online={node.online} />
+          {logo && (
+            <img src={logo} alt="" className="h-6 w-6 shrink-0 rounded-full object-contain" loading="lazy" />
+          )}
+          <span className="min-w-0 flex-1 truncate text-[14px] sm:text-[15px] font-black tracking-wide text-foreground" title={displayName(node)}>
             {displayName(node)}
           </span>
-            <Flag code={node.meta?.region} className="shrink-0" />
+          <Flag code={node.meta?.region} className="shrink-0" />
+        </div>
+
+        {(os || virt) && (
+          <div className="truncate text-xs font-bold text-muted-foreground">
+            {[os, virt].filter(Boolean).join(' · ')}
           </div>
+        )}
 
-          {(os || virt) && (
-              <div className="font-mono text-xs text-muted-foreground truncate">
-                {[os, virt].filter(Boolean).join(' · ')}
-              </div>
-          )}
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 py-1">
+          <ResourceRing label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} size={72} strokeWidth={9} />
+          <ResourceRing
+            label="内存"
+            value={u.mem}
+            sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : null}
+            size={72}
+            strokeWidth={9}
+          />
+          <ResourceRing
+            label="磁盘"
+            value={u.disk}
+            sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : null}
+            size={72}
+            strokeWidth={9}
+          />
+        </div>
 
-          <div className="flex flex-col gap-2.5">
-            <Metric label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} />
-            <Metric
-                label="内存"
-                value={u.mem}
-                sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : null}
-            />
-            <Metric
-                label="磁盘"
-                value={u.disk}
-                sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : null}
-            />
+        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={3} />
+
+        <MiniTcpingPanel node={node} tcpData={[]} loading={false} compact />
+
+        <div className="mt-auto space-y-1.5 border-t border-dashed border-border pt-3 font-mono text-xs text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <AnimatedSpeedStat icon={ArrowDown} value={u.netIn || 0} />
+            <AnimatedSpeedStat icon={ArrowUp} value={u.netOut || 0} />
           </div>
-
-          <div className="pt-2.5 border-t border-dashed font-mono text-xs text-muted-foreground space-y-1.5">
-            <div className="flex items-center gap-3">
-              <Stat icon={ArrowDown}>{bytes(u.netIn || 0)}/s</Stat>
-              <Stat icon={ArrowUp}>{bytes(u.netOut || 0)}/s</Stat>
-            </div>
-            <div className="flex items-center gap-3">
-              <Stat icon={Clock}>{uptime(u.uptime)}</Stat>
-              <span className="ml-auto">{relativeAge(u.ts)}</span>
-            </div>
+          <div className="flex items-center gap-3">
+            <Stat icon={Clock}>{uptime(u.uptime)}</Stat>
+            <span className="ml-auto">{relativeAge(u.ts)}</span>
           </div>
+        </div>
 
-          {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map(t => (
-                    <Badge key={t} variant="outline" className="text-[10px]">
-                      {t}
-                    </Badge>
-                ))}
-              </div>
-          )}
-        </Card>
-      </a>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map(t => (
+              <Badge key={t} variant="outline" className="rounded-full border-border bg-secondary px-2 py-0.5 text-[10px] font-extrabold text-muted-foreground hover:border-primary hover:text-primary">
+                {t}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </Card>
+    </a>
   )
 }
 
 function Stat({ icon: Icon, children }: { icon: LucideIcon; children: ReactNode }) {
   return (
-      <span className="inline-flex items-center gap-1">
+    <span className="inline-flex items-center gap-1">
       <Icon className="h-3 w-3" />
-        {children}
+      {children}
     </span>
   )
 }
 
-function Metric({
-                  label,
-                  value,
-                  sub,
-                  subTitle,
-                }: {
-  label: string
-  value: number | undefined
-  sub?: string | null
-  subTitle?: string
-}) {
+function AnimatedSpeedStat({ icon: Icon, value }: { icon: LucideIcon; value: number }) {
+  const animated = useAnimatedNumber(value || 0, 950)
+  const tone = animated.animating
+    ? animated.trend === 'up'
+      ? 'text-primary'
+      : 'text-amber-500'
+    : 'text-muted-foreground'
+
   return (
-      <div className="min-w-0">
-        <div className="flex justify-between text-xs">
-          <span className="text-muted-foreground">{label}</span>
-          <span className="font-mono">{pct(value)}</span>
-        </div>
-        <Progress value={value} indicatorClassName={loadColor(value)} className="mt-1 h-1.5" />
-        {sub && (
-            <div
-                className="font-mono text-[11px] text-muted-foreground mt-1 truncate"
-                title={subTitle}
-            >
-              {sub}
-            </div>
-        )}
-      </div>
+    <span className={cn('inline-flex items-center gap-1 transition-colors duration-150', tone)}>
+      <Icon className="h-3 w-3" />
+      <span>{bytes(animated.value)}/s</span>
+    </span>
   )
 }
