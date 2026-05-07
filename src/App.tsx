@@ -12,13 +12,22 @@ import { NodeDetail } from './components/NodeDetail'
 import { WorldMap } from './components/WorldMap'
 import { TagFilter } from './components/TagFilter'
 import { RegionFilter } from './components/RegionFilter'
+import { ValueSidebar } from './components/ValueSidebar'
 import { deriveUsage, displayName } from './utils/derive'
-import type { Node, Sort, View } from './types'
+import type { BackgroundSettings, Node, Sort, View } from './types'
 import { nodeKey } from './utils/nodeKey'
 
 const DEFAULT_LOGO = `${import.meta.env.BASE_URL}logo.png`
 const VIEW_KEY = 'nodeget.view'
 const SORT_KEY = 'nodeget.sort'
+const BG_KEY = 'nodeget.background-settings'
+const DEFAULT_BG: BackgroundSettings = {
+  pattern: 'grid',
+  baseColor: '#f5f8fb',
+  accentColor: '#b7c4d6',
+  density: 22,
+  opacity: 0.09,
+}
 
 function initialView(): View {
   const v = localStorage.getItem(VIEW_KEY)
@@ -28,6 +37,23 @@ function initialView(): View {
 
 function initialSort(): Sort {
   return (localStorage.getItem(SORT_KEY) as Sort) || 'default'
+}
+
+function initialBackgroundSettings(): BackgroundSettings {
+  try {
+    const raw = localStorage.getItem(BG_KEY)
+    if (!raw) return DEFAULT_BG
+    const parsed = JSON.parse(raw)
+    return {
+      pattern: parsed.pattern === 'solid' || parsed.pattern === 'dots' ? parsed.pattern : 'grid',
+      baseColor: typeof parsed.baseColor === 'string' ? parsed.baseColor : DEFAULT_BG.baseColor,
+      accentColor: typeof parsed.accentColor === 'string' ? parsed.accentColor : DEFAULT_BG.accentColor,
+      density: typeof parsed.density === 'number' ? parsed.density : DEFAULT_BG.density,
+      opacity: typeof parsed.opacity === 'number' ? parsed.opacity : DEFAULT_BG.opacity,
+    }
+  } catch {
+    return DEFAULT_BG
+  }
 }
 
 function readHash() {
@@ -53,6 +79,7 @@ export function App() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [activeRegion, setActiveRegion] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(readHash)
+  const [backgroundSettings, setBackgroundSettings] = useState<BackgroundSettings>(initialBackgroundSettings)
 
   useEffect(() => {
     localStorage.setItem(VIEW_KEY, view)
@@ -61,6 +88,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(SORT_KEY, sort)
   }, [sort])
+
+  useEffect(() => {
+    localStorage.setItem(BG_KEY, JSON.stringify(backgroundSettings))
+  }, [backgroundSettings])
 
   useEffect(() => {
     const onHash = () => setSelected(readHash())
@@ -158,6 +189,7 @@ export function App() {
         cmp = ar - br
       }
       else if (sort === 'default') cmp = (a.meta?.order ?? 0) - (b.meta?.order ?? 0)
+      else if (sort === 'name') cmp = displayName(a).localeCompare(displayName(b))
 
       return cmp || displayName(a).localeCompare(displayName(b))
     })
@@ -192,7 +224,7 @@ export function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Background />
+      <Background settings={backgroundSettings} />
       <Navbar
         siteName={config.site_name || '你没设置'}
         logo={logo}
@@ -202,58 +234,68 @@ export function App() {
         onView={setView}
         sort={sort}
         onSort={setSort}
+        backgroundSettings={backgroundSettings}
+        onBackgroundSettingsChange={setBackgroundSettings}
       />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
-        {!empty && (
-          <RegionFilter
-            regions={regions.list}
-            total={regions.total}
-            active={activeRegion}
-            onChange={setActiveRegion}
-          />
-        )}
-        {!empty && <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <aside>
+            <ValueSidebar nodes={list} />
+          </aside>
 
-        {empty && loading && (
-          <div className="py-24 flex flex-col items-center gap-3 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <span className="text-sm">连接后端中…</span>
-          </div>
-        )}
+          <section className="space-y-6 min-w-0">
+            {!empty && (
+              <RegionFilter
+                regions={regions.list}
+                total={regions.total}
+                active={activeRegion}
+                onChange={setActiveRegion}
+              />
+            )}
+            {!empty && <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />}
 
-        {empty && !loading && (
-          <div className="py-20 text-center text-muted-foreground">
-            {noNodes ? '暂无节点' : '没有匹配的节点'}
-          </div>
-        )}
+            {empty && loading && (
+              <div className="py-24 flex flex-col items-center gap-3 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-sm">连接后端中…</span>
+              </div>
+            )}
 
-        {!empty && view === 'cards' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {list.map(n => (
-              <NodeCard key={nodeKey(n)} node={n} pool={pool} />
-            ))}
-          </div>
-        )}
-        {!empty && view === 'table' && <NodeTable nodes={list} onOpen={setSelected} />}
-        {!empty && view === 'map' && <WorldMap nodes={list} onOpen={setSelected} />}
+            {empty && !loading && (
+              <div className="py-20 text-center text-muted-foreground">
+                {noNodes ? '暂无节点' : '没有匹配的节点'}
+              </div>
+            )}
 
-        {hasErrors && (
-          <Alert variant="warning">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>{errors.length} 个后端错误</AlertTitle>
-            <AlertDescription>
-              <ul className="list-disc pl-5 space-y-1 mt-2">
-                {errors.map((e, i) => (
-                  <li key={i}>
-                    <b>{e.source}</b>：
-                    {e.error instanceof Error ? e.error.message : String(e.error)}
-                  </li>
+            {!empty && view === 'cards' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
+                {list.map(n => (
+                  <NodeCard key={nodeKey(n)} node={n} pool={pool} />
                 ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
+              </div>
+            )}
+            {!empty && view === 'table' && <NodeTable nodes={list} onOpen={setSelected} />}
+            {!empty && view === 'map' && <WorldMap nodes={list} onOpen={setSelected} />}
+
+            {hasErrors && (
+              <Alert variant="warning">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>{errors.length} 个后端错误</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-5 space-y-1 mt-2">
+                    {errors.map((e, i) => (
+                      <li key={i}>
+                        <b>{e.source}</b>：
+                        {e.error instanceof Error ? e.error.message : String(e.error)}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+          </section>
+        </div>
       </main>
 
       <Footer text={config.footer} />

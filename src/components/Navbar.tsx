@@ -5,7 +5,8 @@ import { ViewToggle } from './ViewToggle'
 import { ThemeToggle } from './ThemeToggle'
 import { SortMenu } from './SortMenu'
 import { Button } from './ui/button'
-import type { Sort, View } from '../types'
+import { BackgroundCustomizer } from './BackgroundCustomizer'
+import type { BackgroundSettings, Sort, View } from '../types'
 
 interface Props {
   siteName: string
@@ -16,9 +17,22 @@ interface Props {
   onView: (v: View) => void
   sort: Sort
   onSort: (v: Sort) => void
+  backgroundSettings: BackgroundSettings
+  onBackgroundSettingsChange: (settings: BackgroundSettings) => void
 }
 
-export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onSort }: Props) {
+export function Navbar({
+  siteName,
+  logo,
+  query,
+  onQuery,
+  view,
+  onView,
+  sort,
+  onSort,
+  backgroundSettings,
+  onBackgroundSettingsChange,
+}: Props) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [stuck, setStuck] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -47,7 +61,7 @@ export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onS
           : 'border-b border-dashed border-border/70 bg-background/70 backdrop-blur-sm'
       }`}
     >
-      <div className="max-w-6xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 py-3 overflow-visible">
+      <div className="max-w-7xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 py-3 overflow-visible">
         <a
           href="./"
           className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3 transition-opacity hover:opacity-80 overflow-hidden"
@@ -68,6 +82,7 @@ export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onS
           >
             {searchOpen ? <X className="h-4 w-4" /> : <SearchIcon className="h-4 w-4" />}
           </Button>
+          <BackgroundCustomizer settings={backgroundSettings} onChange={onBackgroundSettingsChange} className="hidden sm:inline-flex" />
           <SortMenu value={sort} onChange={onSort} />
           <ViewToggle value={view} onChange={onView} />
           <ThemeToggle />
@@ -77,11 +92,14 @@ export function Navbar({ siteName, logo, query, onQuery, view, onView, sort, onS
       <div
         aria-hidden={!searchOpen}
         className={`sm:hidden overflow-hidden transition-all duration-150 ease-out ${
-          searchOpen ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0'
+          searchOpen ? 'max-h-32 opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="px-4 pb-3 pt-1">
+        <div className="space-y-3 px-4 pb-3 pt-1">
           <Search ref={inputRef} value={query} onChange={onQuery} className="w-full" />
+          <div className="flex justify-end">
+            <BackgroundCustomizer settings={backgroundSettings} onChange={onBackgroundSettingsChange} />
+          </div>
         </div>
       </div>
     </header>

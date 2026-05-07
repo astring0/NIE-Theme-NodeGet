@@ -121,6 +121,17 @@ export interface TaskQueryCondition {
   last?: null
 }
 
+
+export type BackgroundPattern = 'grid' | 'solid' | 'dots'
+
+export interface BackgroundSettings {
+  pattern: BackgroundPattern
+  baseColor: string
+  accentColor: string
+  density: number
+  opacity: number
+}
+
 export type View = 'cards' | 'table' | 'map'
 
 export type Sort =
