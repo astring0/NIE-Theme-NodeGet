@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Clock, type LucideIcon } from 'lucide-react'
+import { useMemo } from 'react'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
 import { Flag } from './Flag'
@@ -10,20 +11,31 @@ import { bytes, relativeAge, uptime } from '../utils/format'
 import { cpuLabel, deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
 import { cn } from '../utils/cn'
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
+import { useInViewport } from '../hooks/useInViewport'
+import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
+import { latencyRowsToHistory } from '../utils/latency'
+import type { BackendPool } from '../api/pool'
 import type { Node } from '../types'
 import { nodeKey } from '../utils/nodeKey'
 import type { ReactNode } from 'react'
 
-export function NodeCard({ node }: { node: Node }) {
+export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null }) {
   const u = deriveUsage(node)
   const tags = Array.isArray(node.meta?.tags) ? node.meta.tags : []
   const os = osLabel(node)
   const logo = distroLogo(node)
   const virt = virtLabel(node)
   const cpu = cpuLabel(node)
+  const { ref, visible } = useInViewport<HTMLAnchorElement>({ rootMargin: '320px 0px' })
+  const { tcpData, loading: tcpLoading, error: tcpError } = useNodeTcpLatency(pool, node.source, node.uuid, {
+    enabled: visible,
+    refreshMs: 90_000,
+    priority: visible ? 'high' : 'normal',
+  })
+  const serverHistory = useMemo(() => latencyRowsToHistory(tcpData, 'tcp_ping'), [tcpData])
 
   return (
-    <a href={`#${encodeURIComponent(nodeKey(node))}`} className="block h-full">
+    <a ref={ref} href={`#${encodeURIComponent(nodeKey(node))}`} className="block h-full">
       <Card
         className={cn(
           'group h-full min-h-[432px] sm:min-h-[500px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 hover:border-primary/90 hover:bg-card hover:shadow-[0_0_0_1px_rgba(66,185,131,0.32),0_12px_28px_rgba(15,23,42,0.06)] flex flex-col gap-3.5 sm:gap-4',
@@ -65,9 +77,9 @@ export function NodeCard({ node }: { node: Node }) {
           />
         </div>
 
-        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={3} />
+        <OnlineStatusBar history={node.history || []} serverHistory={serverHistory} loading={tcpLoading} online={node.online} compact slots={40} intervalMinutes={3} />
 
-        <MiniTcpingPanel node={node} tcpData={[]} loading={false} compact />
+        <MiniTcpingPanel node={node} tcpData={tcpData} loading={tcpLoading} error={tcpError} />
 
         <div className="mt-auto space-y-1.5 border-t border-dashed border-border pt-3 font-mono text-xs text-muted-foreground">
           <div className="flex items-center gap-3">

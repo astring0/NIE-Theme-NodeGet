@@ -132,6 +132,28 @@ function parseMeta(raw: Record<string, unknown>): NodeMeta {
   }
 }
 
+function hasOwn(raw: Record<string, unknown> | undefined, key: string) {
+  return Boolean(raw && Object.prototype.hasOwnProperty.call(raw, key))
+}
+
+function mergeMeta(prev: NodeMeta | undefined, next: NodeMeta, raw?: Record<string, unknown>): NodeMeta {
+  const base = prev ?? emptyMeta()
+  return {
+    name: next.name || base.name,
+    region: next.region || base.region,
+    tags: next.tags.length ? next.tags : base.tags,
+    hidden: hasOwn(raw, 'metadata_hidden') ? next.hidden : base.hidden,
+    virtualization: next.virtualization || base.virtualization,
+    lat: hasOwn(raw, 'metadata_latitude') ? next.lat : base.lat,
+    lng: hasOwn(raw, 'metadata_longitude') ? next.lng : base.lng,
+    order: hasOwn(raw, 'metadata_order') ? next.order : base.order,
+    price: hasOwn(raw, 'metadata_price') ? next.price : base.price,
+    priceUnit: next.priceUnit || base.priceUnit,
+    priceCycle: hasOwn(raw, 'metadata_price_cycle') ? next.priceCycle : base.priceCycle,
+    expireTime: next.expireTime || base.expireTime,
+  }
+}
+
 function sampleFrom(row: DynamicSummary): HistorySample {
   const memTotal = row.total_memory || 0
   const diskTotal = row.total_space || 0
@@ -235,7 +257,8 @@ export function useNodes(config: SiteConfig | null) {
           const raw = grouped.get(uuid)
           if (!raw) continue
           const key = nodeKeyFrom(entry.name, uuid)
-          const parsed = parseMeta(raw)
+          const cached = metaCache.get(key)
+          const parsed = mergeMeta(cached, parseMeta(raw), raw)
           parsedMetaByKey.set(key, parsed)
           metaCache.set(key, parsed)
         }
@@ -252,7 +275,7 @@ export function useNodes(config: SiteConfig | null) {
           const parsed = parsedMetaByKey.get(key)
           if (!parsed) continue
           const cur = next.get(key) ?? blankAgent(uuid, entry.name, metaCache.get(key))
-          next.set(key, { ...cur, meta: parsed })
+          next.set(key, { ...cur, meta: mergeMeta(cur.meta, parsed) })
         }
 
         if (stat.status === 'fulfilled' && stat.value) {

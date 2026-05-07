@@ -231,7 +231,7 @@ export function App() {
         {!empty && view === 'cards' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {list.map(n => (
-              <NodeCard key={nodeKey(n)} node={n} />
+              <NodeCard key={nodeKey(n)} node={n} pool={pool} />
             ))}
           </div>
         )}
