@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { AlertTriangle, CircleDollarSign, Coins, Server, Wallet } from 'lucide-react'
+import { AlertTriangle, Coins, Server } from 'lucide-react'
 import { Card } from './ui/card'
 import { Badge } from './ui/badge'
 import { Progress } from './ui/progress'
@@ -9,12 +9,6 @@ import type { Node } from '../types'
 
 interface Props {
   nodes: Node[]
-}
-
-interface CurrencySummary {
-  unit: string
-  monthly: number
-  remaining: number
 }
 
 export function ValueSidebar({ nodes }: Props) {
@@ -27,30 +21,14 @@ export function ValueSidebar({ nodes }: Props) {
     .sort((a, b) => a.days - b.days)
 
   const within30 = expiringSoon.filter(item => item.days <= 30).length
-  const currencyMap = new Map<string, CurrencySummary>()
-
-  for (const node of billable) {
-    const unit = (node.meta.priceUnit || '$').trim() || '$'
-    const cur = currencyMap.get(unit) || { unit, monthly: 0, remaining: 0 }
-    cur.monthly += monthlyCost(node.meta.price, node.meta.priceCycle)
-    cur.remaining += remainingValue(node.meta)
-    currencyMap.set(unit, cur)
-  }
-
-  const totals = [...currencyMap.values()].sort((a, b) => b.remaining - a.remaining)
+  const monthlyCny = billable.reduce((sum, node) => sum + monthlyCost(node.meta.price, node.meta.priceCycle), 0)
+  const remainingCny = billable.reduce((sum, node) => sum + remainingValue(node.meta), 0)
 
   return (
     <div className="space-y-4 xl:sticky xl:top-24">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
         <StatCard icon={Server} label="在线 / 总节点" value={`${online} / ${visible.length}`} sub="当前可见节点" />
-        <StatCard icon={Wallet} label="账单节点" value={`${billable.length}`} sub="已设置价格或到期时间" />
         <StatCard icon={AlertTriangle} label="30 天内到期" value={`${within30}`} sub="建议优先关注" />
-        <StatCard
-          icon={CircleDollarSign}
-          label="剩余价值"
-          value={totals.length ? formatCurrencyCompact(totals[0]) : '—'}
-          sub={totals.length > 1 ? `另有 ${totals.length - 1} 种币种` : '按币种分组显示'}
-        />
       </div>
 
       <Card className="p-4 space-y-4">
@@ -58,31 +36,26 @@ export function ValueSidebar({ nodes }: Props) {
           <Coins className="h-4 w-4 text-primary" />
           <div>
             <div className="text-sm font-bold">费用概览</div>
-            <div className="text-xs text-muted-foreground">按币种分别统计，避免混币误差</div>
+            <div className="text-xs text-muted-foreground">固定按 CNY 统计</div>
           </div>
         </div>
 
-        <div className="space-y-3">
-          {totals.length === 0 && <div className="text-sm text-muted-foreground">暂未设置价格或到期信息</div>}
-          {totals.slice(0, 4).map(item => (
-            <div key={item.unit} className="rounded-md border border-dashed border-border px-3 py-2.5">
-              <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="font-semibold">{item.unit} 月成本</span>
-                <span className="font-mono font-bold">{formatAmount(item.monthly, item.unit)}</span>
-              </div>
-              <div className="mt-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <span>剩余价值</span>
-                <span className="font-mono">{formatAmount(item.remaining, item.unit)}</span>
-              </div>
-            </div>
-          ))}
+        <div className="rounded-md border border-dashed border-border px-3 py-3">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="font-semibold">折算月成本</span>
+            <span className="font-mono text-lg font-black text-foreground">{formatCny(monthlyCny)}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>剩余价值</span>
+            <span className="font-mono">{formatCny(remainingCny)}</span>
+          </div>
         </div>
       </Card>
 
       <Card className="p-4 space-y-4">
         <div>
           <div className="text-sm font-bold">临近到期</div>
-          <div className="text-xs text-muted-foreground">美观优先，先显示最需要关注的几台</div>
+          <div className="text-xs text-muted-foreground">显示最需要关注的几台</div>
         </div>
         <div className="space-y-3">
           {expiringSoon.length === 0 && <div className="text-sm text-muted-foreground">暂无已设置到期时间的节点</div>}
@@ -101,7 +74,7 @@ export function ValueSidebar({ nodes }: Props) {
                 <Progress value={cycleProgress(node.meta)} className="h-1.5 rounded-sm" />
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>{node.meta.expireTime || '未设置'}</span>
-                  {node.meta.price > 0 ? <span>{formatAmount(remainingValue(node.meta), node.meta.priceUnit || '$')}</span> : <span>—</span>}
+                  {node.meta.price > 0 ? <span>{formatCny(remainingValue(node.meta))}</span> : <span>—</span>}
                 </div>
               </div>
             </div>
@@ -135,11 +108,6 @@ function monthlyCost(price: number, cycle: number) {
   return price * (30 / safeCycle)
 }
 
-function formatAmount(value: number, unit: string) {
-  const rounded = value >= 1000 ? value.toFixed(0) : value.toFixed(2)
-  return `${unit}${rounded}`
-}
-
-function formatCurrencyCompact(item: CurrencySummary) {
-  return `${item.unit}${item.remaining.toFixed(item.remaining >= 1000 ? 0 : 2)}`
+function formatCny(value: number) {
+  return `¥${(Number.isFinite(value) ? value : 0).toFixed(2)}`
 }

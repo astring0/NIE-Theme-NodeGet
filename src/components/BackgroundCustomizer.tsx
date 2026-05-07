@@ -17,27 +17,6 @@ interface Props {
   className?: string
 }
 
-const PRESETS: { label: string; value: BackgroundSettings }[] = [
-  {
-    label: '浅色网格',
-    value: { pattern: 'grid', baseColor: '#f5f8fb', accentColor: '#b7c4d6', density: 22, opacity: 0.09 },
-  },
-  {
-    label: '深色点阵',
-    value: { pattern: 'dots', baseColor: '#111827', accentColor: '#34d399', density: 24, opacity: 0.16 },
-  },
-  {
-    label: '纯色蓝灰',
-    value: { pattern: 'solid', baseColor: '#eef3f8', accentColor: '#94a3b8', density: 22, opacity: 0.08 },
-  },
-]
-
-const PATTERNS: { value: BackgroundPattern; label: string }[] = [
-  { value: 'grid', label: '网格' },
-  { value: 'solid', label: '纯色' },
-  { value: 'dots', label: '点状' },
-]
-
 const DEFAULT_SETTINGS: BackgroundSettings = {
   pattern: 'grid',
   baseColor: '#f5f8fb',
@@ -46,7 +25,30 @@ const DEFAULT_SETTINGS: BackgroundSettings = {
   opacity: 0.09,
 }
 
+const PALETTES: { label: string; baseColor: string; accentColor: string }[] = [
+  { label: '云白', baseColor: '#f5f8fb', accentColor: '#b7c4d6' },
+  { label: '薄荷', baseColor: '#f2fbf6', accentColor: '#34d399' },
+  { label: '海盐蓝', baseColor: '#f2f7ff', accentColor: '#60a5fa' },
+  { label: '紫雾', baseColor: '#f7f3ff', accentColor: '#a78bfa' },
+  { label: '蜜桃', baseColor: '#fff7ed', accentColor: '#fb923c' },
+  { label: '玫瑰', baseColor: '#fff1f2', accentColor: '#fb7185' },
+  { label: '奶油黄', baseColor: '#fffbea', accentColor: '#facc15' },
+  { label: '曜石', baseColor: '#111827', accentColor: '#94a3b8' },
+  { label: '深海', baseColor: '#0f172a', accentColor: '#38bdf8' },
+  { label: '森林', baseColor: '#102019', accentColor: '#4ade80' },
+]
+
+const PATTERNS: { value: BackgroundPattern; label: string }[] = [
+  { value: 'grid', label: '网格' },
+  { value: 'solid', label: '纯色' },
+  { value: 'dots', label: '点状' },
+]
+
 export function BackgroundCustomizer({ settings, onChange, className }: Props) {
+  const activePalette = PALETTES.find(
+    item => item.baseColor === settings.baseColor && item.accentColor === settings.accentColor,
+  )?.label
+
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -64,11 +66,11 @@ export function BackgroundCustomizer({ settings, onChange, className }: Props) {
 
         <div className="space-y-5">
           <div className="rounded-lg border border-dashed border-border p-4">
-            <div className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">预览</div>
-            <div
-              className="h-28 rounded-md border border-border"
-              style={previewStyle(settings)}
-            />
+            <div className="mb-3 flex items-center justify-between gap-3 text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
+              <span>预览</span>
+              <span className="normal-case tracking-normal">{activePalette || '预设色'}</span>
+            </div>
+            <div className="h-28 rounded-md border border-border" style={previewStyle(settings)} />
           </div>
 
           <div className="space-y-2">
@@ -92,17 +94,30 @@ export function BackgroundCustomizer({ settings, onChange, className }: Props) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <ColorField
-              label="底色"
-              value={settings.baseColor}
-              onChange={value => onChange({ ...settings, baseColor: value })}
-            />
-            <ColorField
-              label="纹理颜色"
-              value={settings.accentColor}
-              onChange={value => onChange({ ...settings, accentColor: value })}
-            />
+          <div className="space-y-2">
+            <div className="text-sm font-semibold">颜色</div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {PALETTES.map(item => {
+                const active = item.baseColor === settings.baseColor && item.accentColor === settings.accentColor
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => onChange({ ...settings, baseColor: item.baseColor, accentColor: item.accentColor })}
+                    className={cn(
+                      'rounded-md border p-2 text-left transition-colors hover:bg-secondary',
+                      active ? 'border-primary bg-primary/10' : 'border-border bg-card',
+                    )}
+                  >
+                    <span className="mb-2 flex h-9 overflow-hidden rounded-sm border border-border">
+                      <span className="flex-1" style={{ backgroundColor: item.baseColor }} />
+                      <span className="w-7" style={{ backgroundColor: item.accentColor }} />
+                    </span>
+                    <span className={cn('block text-xs font-semibold', active && 'text-primary')}>{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <RangeField
@@ -123,34 +138,14 @@ export function BackgroundCustomizer({ settings, onChange, className }: Props) {
             onChange={value => onChange({ ...settings, opacity: value / 100 })}
           />
 
-          <div className="space-y-2">
-            <div className="text-sm font-semibold">快捷预设</div>
-            <div className="flex flex-wrap gap-2">
-              {PRESETS.map(item => (
-                <Button key={item.label} variant="outline" size="sm" onClick={() => onChange(item.value)}>
-                  {item.label}
-                </Button>
-              ))}
-              <Button variant="ghost" size="sm" onClick={() => onChange(DEFAULT_SETTINGS)}>
-                <RotateCcw className="mr-1 h-3.5 w-3.5" /> 恢复默认
-              </Button>
-            </div>
+          <div className="flex justify-end">
+            <Button variant="ghost" size="sm" onClick={() => onChange(DEFAULT_SETTINGS)}>
+              <RotateCcw className="mr-1 h-3.5 w-3.5" /> 恢复默认
+            </Button>
           </div>
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="space-y-2">
-      <div className="text-sm font-semibold">{label}</div>
-      <div className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-        <input type="color" value={value} onChange={e => onChange(e.target.value)} className="h-9 w-12 cursor-pointer rounded border-0 bg-transparent p-0" />
-        <input value={value} onChange={e => onChange(e.target.value)} className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm" />
-      </div>
-    </label>
   )
 }
 

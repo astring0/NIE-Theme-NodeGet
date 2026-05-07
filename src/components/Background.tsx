@@ -41,12 +41,8 @@ export function Background({ settings }: Props) {
 
   return (
     <div
-      className="fixed inset-0 -z-10 transition-[background-color,background-image] duration-300"
-      style={{
-        backgroundColor: base,
-        backgroundImage,
-        backgroundSize,
-      }}
+      className="fixed inset-0 z-0 pointer-events-none transition-[background-color,background-image] duration-300"
+      style={{ backgroundColor: base, backgroundImage, backgroundSize }}
       aria-hidden
     />
   )

@@ -222,90 +222,104 @@ export function App() {
   const noNodes = nodes.size === 0
   const hasErrors = errors.length > 0
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      <Background settings={backgroundSettings} />
-      <Navbar
-        siteName={config.site_name || '你没设置'}
-        logo={logo}
-        query={query}
-        onQuery={setQuery}
-        view={view}
-        onView={setView}
-        sort={sort}
-        onSort={setSort}
-        backgroundSettings={backgroundSettings}
-        onBackgroundSettingsChange={setBackgroundSettings}
-      />
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-          <aside>
-            <ValueSidebar nodes={list} />
-          </aside>
-
-          <section className="space-y-6 min-w-0">
-            {!empty && (
-              <RegionFilter
-                regions={regions.list}
-                total={regions.total}
-                active={activeRegion}
-                onChange={setActiveRegion}
-              />
-            )}
-            {!empty && <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />}
-
-            {empty && loading && (
-              <div className="py-24 flex flex-col items-center gap-3 text-muted-foreground">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="text-sm">连接后端中…</span>
-              </div>
-            )}
-
-            {empty && !loading && (
-              <div className="py-20 text-center text-muted-foreground">
-                {noNodes ? '暂无节点' : '没有匹配的节点'}
-              </div>
-            )}
-
-            {!empty && view === 'cards' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-4">
-                {list.map(n => (
-                  <NodeCard key={nodeKey(n)} node={n} pool={pool} />
-                ))}
-              </div>
-            )}
-            {!empty && view === 'table' && <NodeTable nodes={list} onOpen={setSelected} />}
-            {!empty && view === 'map' && <WorldMap nodes={list} onOpen={setSelected} />}
-
-            {hasErrors && (
-              <Alert variant="warning">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>{errors.length} 个后端错误</AlertTitle>
-                <AlertDescription>
-                  <ul className="list-disc pl-5 space-y-1 mt-2">
-                    {errors.map((e, i) => (
-                      <li key={i}>
-                        <b>{e.source}</b>：
-                        {e.error instanceof Error ? e.error.message : String(e.error)}
-                      </li>
-                    ))}
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            )}
-          </section>
+  const content = (
+    <>
+      {empty && loading && (
+        <div className="py-24 flex flex-col items-center gap-3 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <span className="text-sm">连接后端中…</span>
         </div>
-      </main>
+      )}
 
-      <Footer text={config.footer} />
+      {empty && !loading && (
+        <div className="py-20 text-center text-muted-foreground">
+          {noNodes ? '暂无节点' : '没有匹配的节点'}
+        </div>
+      )}
 
-      <NodeDetail
-        node={selectedNode}
-        onClose={() => setSelected(null)}
-        showSource={(config.site_tokens?.length ?? 0) > 1}
-        pool={pool}
-      />
+      {!empty && view === 'cards' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {list.map(n => (
+            <NodeCard key={nodeKey(n)} node={n} pool={pool} />
+          ))}
+        </div>
+      )}
+      {!empty && view === 'table' && <NodeTable nodes={list} onOpen={setSelected} />}
+      {!empty && view === 'map' && <WorldMap nodes={list} onOpen={setSelected} />}
+
+      {hasErrors && (
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>{errors.length} 个后端错误</AlertTitle>
+          <AlertDescription>
+            <ul className="list-disc pl-5 space-y-1 mt-2">
+              {errors.map((e, i) => (
+                <li key={i}>
+                  <b>{e.source}</b>：
+                  {e.error instanceof Error ? e.error.message : String(e.error)}
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+    </>
+  )
+
+  return (
+    <div className="relative min-h-screen">
+      <Background settings={backgroundSettings} />
+      <div className="relative z-10 min-h-screen flex flex-col">
+        <Navbar
+          siteName={config.site_name || '你没设置'}
+          logo={logo}
+          query={query}
+          onQuery={setQuery}
+          view={view}
+          onView={setView}
+          sort={sort}
+          onSort={setSort}
+          backgroundSettings={backgroundSettings}
+          onBackgroundSettingsChange={setBackgroundSettings}
+        />
+
+        <main className="flex-1 w-full px-4 sm:px-6 py-6 sm:py-8">
+          <div className="mx-auto w-full max-w-[91.5rem] space-y-6">
+            <div className="mx-auto w-full max-w-6xl space-y-3">
+              {!empty && (
+                <RegionFilter
+                  regions={regions.list}
+                  total={regions.total}
+                  active={activeRegion}
+                  onChange={setActiveRegion}
+                />
+              )}
+              {!empty && <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />}
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[18rem_minmax(0,72rem)] xl:justify-center">
+              {!empty && (
+                <aside className="order-2 xl:order-1">
+                  <ValueSidebar nodes={list} />
+                </aside>
+              )}
+
+              <section className={`order-1 xl:order-2 min-w-0 space-y-6 ${empty ? 'xl:col-span-2 xl:mx-auto xl:w-full xl:max-w-6xl' : ''}`}>
+                {content}
+              </section>
+            </div>
+          </div>
+        </main>
+
+        <Footer text={config.footer} />
+
+        <NodeDetail
+          node={selectedNode}
+          onClose={() => setSelected(null)}
+          showSource={(config.site_tokens?.length ?? 0) > 1}
+          pool={pool}
+        />
+      </div>
     </div>
   )
 }
