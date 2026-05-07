@@ -1,5 +1,5 @@
-import type { ComponentType } from 'react'
-import { AlertTriangle, Coins, Server } from 'lucide-react'
+import { useMemo, useState, type ComponentType } from 'react'
+import { AlertTriangle, ChevronDown, Coins, Server } from 'lucide-react'
 import { Card } from './ui/card'
 import { Badge } from './ui/badge'
 import { Progress } from './ui/progress'
@@ -12,8 +12,9 @@ interface Props {
 }
 
 export function ValueSidebar({ nodes }: Props) {
-  const visible = nodes.filter(n => !n.meta?.hidden)
-  const billable = visible.filter(n => hasCost(n.meta))
+  const [costOpen, setCostOpen] = useState(false)
+  const visible = useMemo(() => nodes.filter(n => !n.meta?.hidden), [nodes])
+  const billable = useMemo(() => visible.filter(n => hasCost(n.meta)), [visible])
   const online = visible.filter(n => n.online).length
   const expiringSoon = billable
     .map(node => ({ node, days: remainingDays(node.meta.expireTime) }))
@@ -26,31 +27,46 @@ export function ValueSidebar({ nodes }: Props) {
 
   return (
     <div className="space-y-4 xl:sticky xl:top-24">
+      <Card className="overflow-hidden p-0">
+        <button
+          type="button"
+          onClick={() => setCostOpen(v => !v)}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-primary/10 p-2 text-primary">
+              <Coins className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="text-sm font-bold">剩余价值统计</div>
+              <div className="text-xs text-muted-foreground">默认收起，按 CNY 统计</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-black">{formatCny(remainingCny)}</span>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-150 ${costOpen ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {costOpen && (
+          <div className="border-t border-dashed border-border px-4 pb-4 pt-3">
+            <div className="rounded-lg border border-dashed border-border px-3 py-3">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-semibold">折算月成本</span>
+                <span className="font-mono text-lg font-black text-foreground">{formatCny(monthlyCny)}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                <span>剩余价值</span>
+                <span className="font-mono">{formatCny(remainingCny)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
         <StatCard icon={Server} label="在线 / 总节点" value={`${online} / ${visible.length}`} sub="当前可见节点" />
         <StatCard icon={AlertTriangle} label="30 天内到期" value={`${within30}`} sub="建议优先关注" />
       </div>
-
-      <Card className="p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <Coins className="h-4 w-4 text-primary" />
-          <div>
-            <div className="text-sm font-bold">费用概览</div>
-            <div className="text-xs text-muted-foreground">固定按 CNY 统计</div>
-          </div>
-        </div>
-
-        <div className="rounded-md border border-dashed border-border px-3 py-3">
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="font-semibold">折算月成本</span>
-            <span className="font-mono text-lg font-black text-foreground">{formatCny(monthlyCny)}</span>
-          </div>
-          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span>剩余价值</span>
-            <span className="font-mono">{formatCny(remainingCny)}</span>
-          </div>
-        </div>
-      </Card>
 
       <Card className="p-4 space-y-4">
         <div>
@@ -60,7 +76,7 @@ export function ValueSidebar({ nodes }: Props) {
         <div className="space-y-3">
           {expiringSoon.length === 0 && <div className="text-sm text-muted-foreground">暂无已设置到期时间的节点</div>}
           {expiringSoon.slice(0, 6).map(({ node, days }) => (
-            <div key={`${node.source}:${node.uuid}`} className="rounded-md border border-dashed border-border px-3 py-2.5">
+            <div key={`${node.source}:${node.uuid}`} className="rounded-lg border border-dashed border-border px-3 py-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{displayName(node)}</div>
@@ -89,7 +105,7 @@ function StatCard({ icon: Icon, label, value, sub }: { icon: ComponentType<{ cla
   return (
     <Card className="p-4">
       <div className="flex items-start gap-3">
-        <div className="rounded-md bg-primary/10 p-2 text-primary">
+        <div className="rounded-lg bg-primary/10 p-2 text-primary">
           <Icon className="h-4 w-4" />
         </div>
         <div className="min-w-0">

@@ -12,6 +12,7 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={dark ? '切换到浅色' : '切换到深色'}
       title={dark ? '浅色模式' : '深色模式'}
+      className="h-11 w-11 rounded-xl"
     >
       {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </Button>

@@ -13,6 +13,7 @@ import { WorldMap } from './components/WorldMap'
 import { TagFilter } from './components/TagFilter'
 import { RegionFilter } from './components/RegionFilter'
 import { ValueSidebar } from './components/ValueSidebar'
+import { ScrollToTopButton } from './components/ScrollToTopButton'
 import { deriveUsage, displayName } from './utils/derive'
 import type { BackgroundSettings, Node, Sort, View } from './types'
 import { nodeKey } from './utils/nodeKey'
@@ -297,14 +298,14 @@ export function App() {
               {!empty && <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />}
             </div>
 
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[18rem_minmax(0,72rem)] xl:justify-center">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[18rem_minmax(0,72rem)] xl:justify-center xl:items-start">
               {!empty && (
-                <aside className="order-2 xl:order-1">
+                <aside className="order-1 xl:order-1">
                   <ValueSidebar nodes={list} />
                 </aside>
               )}
 
-              <section className={`order-1 xl:order-2 min-w-0 space-y-6 ${empty ? 'xl:col-span-2 xl:mx-auto xl:w-full xl:max-w-6xl' : ''}`}>
+              <section className={`order-2 xl:order-2 min-w-0 space-y-6 ${empty ? 'xl:col-span-2 xl:mx-auto xl:w-full xl:max-w-6xl' : ''}`}>
                 {content}
               </section>
             </div>
@@ -319,6 +320,8 @@ export function App() {
           showSource={(config.site_tokens?.length ?? 0) > 1}
           pool={pool}
         />
+
+        <ScrollToTopButton />
       </div>
     </div>
   )

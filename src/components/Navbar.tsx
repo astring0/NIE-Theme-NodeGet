@@ -55,28 +55,28 @@ export function Navbar({
   return (
     <header
       ref={headerRef}
-      className={`sticky top-0 z-50 transition-[background-color,backdrop-filter,border-color] duration-200 ${
+      className={`sticky top-0 z-50 transition-[background-color,border-color] duration-150 ${
         stuck
-          ? 'border-b border-dashed border-border bg-background/90 backdrop-blur'
-          : 'border-b border-dashed border-border/70 bg-background/70 backdrop-blur-sm'
+          ? 'border-b border-dashed border-border bg-background/92 backdrop-blur'
+          : 'border-b border-dashed border-border/70 bg-background/72 backdrop-blur-sm'
       }`}
     >
-      <div className="max-w-7xl mx-auto flex min-h-[72px] sm:h-20 items-center justify-between gap-2 sm:gap-3 px-3 sm:px-6 py-3 overflow-visible">
+      <div className="mx-auto flex min-h-[72px] max-w-7xl items-center justify-between gap-2 overflow-visible px-3 py-3 sm:h-20 sm:gap-3 sm:px-6">
         <a
           href="./"
-          className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3 transition-opacity hover:opacity-80 overflow-hidden"
+          className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden transition-opacity hover:opacity-80 sm:gap-3"
         >
-          {logo && <img src={logo} alt="" className="h-9 w-9 sm:h-12 sm:w-12 shrink-0 rounded-full border-2 border-border object-cover" />}
-          <span className="block max-w-full truncate text-base sm:text-xl font-black tracking-wide text-primary">{siteName}</span>
+          {logo && <img src={logo} alt="" className="h-9 w-9 shrink-0 rounded-xl border border-border object-cover sm:h-11 sm:w-11" />}
+          <span className="block max-w-full truncate text-base font-black tracking-wide text-primary sm:text-xl">{siteName}</span>
         </a>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2.5 pl-1">
+        <div className="flex shrink-0 items-center gap-1.5 pl-1 sm:gap-2.5">
           <div className="hidden sm:block">
             <Search value={query} onChange={onQuery} />
           </div>
           <Button
             variant="outline"
             size="icon"
-            className="sm:hidden"
+            className="h-11 w-11 rounded-xl sm:hidden"
             onClick={() => setSearchOpen(o => !o)}
             aria-label={searchOpen ? '关闭搜索' : '搜索'}
           >
@@ -91,7 +91,7 @@ export function Navbar({
 
       <div
         aria-hidden={!searchOpen}
-        className={`sm:hidden overflow-hidden transition-all duration-150 ease-out ${
+        className={`overflow-hidden transition-all duration-150 ease-out sm:hidden ${
           searchOpen ? 'max-h-32 opacity-100' : 'max-h-0 opacity-0'
         }`}
       >

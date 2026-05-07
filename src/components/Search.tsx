@@ -12,7 +12,7 @@ interface Props {
 
 export const Search = forwardRef<HTMLInputElement, Props>(
   ({ value, onChange, className, autoFocus }, ref) => (
-    <div className={cn('relative w-40 md:w-56', className)}>
+    <div className={cn('relative w-44 md:w-64', className)}>
       <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         ref={ref}
@@ -20,7 +20,7 @@ export const Search = forwardRef<HTMLInputElement, Props>(
         placeholder="搜索节点…"
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="h-10 rounded-[14px] border-border bg-secondary pl-9 font-bold shadow-none placeholder:font-bold"
+        className="h-11 rounded-xl border-border bg-secondary pl-9 font-semibold shadow-none placeholder:font-semibold"
         autoFocus={autoFocus}
       />
     </div>
