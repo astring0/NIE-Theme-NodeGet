@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const NODEGET_REPO = 'https://github.com/NodeSeekDev/NodeGet-StatusShow'
-const NIE_REPO = 'https://github.com/3257085208/NodeGet-StatusShow'
+const REPO = 'https://github.com/NodeSeekDev/NodeGet-StatusShow'
 const PKG_URL = 'https://raw.githubusercontent.com/NodeSeekDev/NodeGet-StatusShow/main/package.json'
 
 export function Footer({ text }: { text?: string }) {
@@ -15,30 +14,17 @@ export function Footer({ text }: { text?: string }) {
   }, [])
 
   const outdated = latest != null && latest !== __APP_VERSION__
-  const normalizedText = text?.trim()
-  const useDefaultCredit = !normalizedText || normalizedText === 'Powered by NodeGet' || normalizedText === 'Powered by NodeGet & NIE'
 
   return (
     <footer className="border-t">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex justify-end gap-4 text-xs text-muted-foreground">
-        {useDefaultCredit ? (
-          <span>
-            Powered by{' '}
-            <a href={NODEGET_REPO} target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">
-              NodeGet
-            </a>{' '}
-            &{' '}
-            <a href={NIE_REPO} target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">
-              NIE
-            </a>
-          </span>
-        ) : (
-          <span>{normalizedText}</span>
-        )}
+        <a href={REPO} target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">
+          {text || 'Powered by NodeGet'}
+        </a>
         <span>
           v{__APP_VERSION__}
           {outdated && (
-            <a href={`${NODEGET_REPO}/releases`} target="_blank" rel="noreferrer" className="ml-1 text-destructive">
+            <a href={`${REPO}/releases`} target="_blank" rel="noreferrer" className="ml-1 text-destructive">
               (Need Update)
             </a>
           )}

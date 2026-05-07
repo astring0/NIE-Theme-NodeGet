@@ -13,25 +13,18 @@ import {
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
-import { OnlineStatusBar } from './OnlineStatusBar'
-import { ResourceRing } from './ResourceRing'
 import { Flag } from './Flag'
 import { StatusDot } from './StatusDot'
 import { bytes, pct, relativeAge, uptime } from '../utils/format'
 import { deriveUsage, displayName, distroLogo, osLabel, virtLabel } from '../utils/derive'
 import { cycleProgress, hasCost, remainingDays, remainingValue } from '../utils/cost'
-import { cn } from '../utils/cn'
+import { cn, strokeColor } from '../utils/cn'
 import {
   buildLatencyChart,
-  buildLatencyQualityRows,
-  filterRowsByLatestSeries,
-  qualitySegmentColor,
-  latencyRowsToHistory,
-  type LatencyQualityRow,
+  computeLatencyStats,
+  type LatencyStats,
 } from '../utils/latency'
 import { useNodeLatency } from '../hooks/useNodeLatency'
-import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
-import { useIsMobile } from '../hooks/useIsMobile'
 import type { BackendPool } from '../api/pool'
 import type { HistorySample, LatencyType, Node, NodeMeta, TaskQueryResult } from '../types'
 
@@ -80,18 +73,11 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     return () => el.removeEventListener('scroll', onScroll)
   }, [node])
 
-  const isMobile = useIsMobile()
-  const { pingData, tcpData, loading: latencyLoading, error: latencyError } = useNodeLatency(
+  const { pingData, tcpData, loading: latencyLoading } = useNodeLatency(
     pool,
     node?.source ?? null,
     node?.uuid ?? null,
   )
-  const { tcpData: availabilityTcpData, loading: availabilityLoading } = useNodeTcpLatency(
-    pool,
-    node?.source ?? null,
-    node?.uuid ?? null,
-  )
-  const serverHistory = useMemo(() => latencyRowsToHistory(availabilityTcpData, 'tcp_ping'), [availabilityTcpData])
 
   if (!node) return null
 
@@ -109,13 +95,11 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
       ? `${d.load_one.toFixed(2)} / ${d.load_five.toFixed(2)} / ${d.load_fifteen.toFixed(2)}`
       : null
   const history = node.history || []
-  const trendHistory = history.slice(-120)
-  const onlineSlots = isMobile ? 40 : 80
 
   return (
     <div
       ref={scrollRef}
-      className="fixed inset-0 z-50 bg-background overflow-y-auto"
+      className="fixed inset-0 z-50 bg-background overflow-y-auto animate-in fade-in duration-150"
     >
       <div
         ref={headerRef}
@@ -157,60 +141,33 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
         <Section title="资源">
-          <div className="flex flex-wrap justify-around gap-5 sm:gap-8">
-            <ResourceRing label="CPU" value={u.cpu} sub={loadAvg ?? undefined} size={116} strokeWidth={10} centerClassName="text-[17px] font-black text-foreground" labelClassName="mt-2 text-base font-semibold text-foreground" subClassName="mt-3 truncate text-sm font-mono text-muted-foreground" />
-            <ResourceRing
+          <div className="flex flex-wrap justify-around gap-4 sm:gap-6">
+            <Ring label="CPU" value={u.cpu} sub={loadAvg ?? undefined} />
+            <Ring
               label="内存"
               value={u.mem}
               sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : undefined}
-              size={116}
-              strokeWidth={10}
-              centerClassName="text-[17px] font-black text-foreground"
-              labelClassName="mt-2 text-base font-semibold text-foreground"
-              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
             />
-            <ResourceRing
+            <Ring
               label="磁盘"
               value={u.disk}
               sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : undefined}
-              size={116}
-              strokeWidth={10}
-              centerClassName="text-[17px] font-black text-foreground"
-              labelClassName="mt-2 text-base font-semibold text-foreground"
-              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
             />
             {swap != null && (
-              <ResourceRing
+              <Ring
                 label="Swap"
                 value={swap}
                 sub={`${bytes(d?.used_swap)} / ${bytes(d?.total_swap)}`}
-                size={116}
-                strokeWidth={10}
-                centerClassName="text-[17px] font-black text-foreground"
-                labelClassName="mt-2 text-base font-semibold text-foreground"
-                subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
               />
             )}
           </div>
         </Section>
 
-        <Section title="在线状态">
-          <OnlineStatusBar
-            history={history}
-            serverHistory={serverHistory}
-            loading={availabilityLoading}
-            online={node.online}
-            intervalMinutes={3}
-            slots={onlineSlots}
-            title="在线状态"
-          />
-        </Section>
-
-        {trendHistory.length > 1 && (
-          <Section title="近 240 秒趋势">
+        {history.length > 1 && (
+          <Section title={`近 ${history.length * 2} 秒趋势`}>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Spark
-                data={trendHistory}
+                data={history}
                 dataKey="cpu"
                 label="CPU %"
                 stroke="#3b82f6"
@@ -218,7 +175,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
                 format={pct}
               />
               <Spark
-                data={trendHistory}
+                data={history}
                 dataKey="mem"
                 label="内存 %"
                 stroke="#10b981"
@@ -226,14 +183,14 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
                 format={pct}
               />
               <Spark
-                data={trendHistory}
+                data={history}
                 dataKey="netIn"
                 label="下行"
                 stroke="#8b5cf6"
                 format={v => `${bytes(v)}/s`}
               />
               <Spark
-                data={trendHistory}
+                data={history}
                 dataKey="netOut"
                 label="上行"
                 stroke="#f59e0b"
@@ -248,9 +205,8 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
           rows={tcpData}
           type="tcp_ping"
           loading={latencyLoading}
-          error={latencyError}
         />
-        <LatencyBlock title="Ping" rows={pingData} type="ping" loading={latencyLoading} error={latencyError} />
+        <LatencyBlock title="Ping" rows={pingData} type="ping" loading={latencyLoading} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <Section title="系统">
@@ -316,6 +272,47 @@ function KV({ k, v }: { k: string; v: ReactNode }) {
   )
 }
 
+function Ring({ label, value, sub }: { label: string; value?: number; sub?: string }) {
+  const r = 40
+  const c = 2 * Math.PI * r
+  const v = Math.max(0, Math.min(100, value ?? 0))
+  const hasValue = Number.isFinite(value)
+
+  return (
+    <div className="flex flex-col items-center gap-2 min-w-0">
+      <div className="relative w-24 h-24 sm:w-28 sm:h-28">
+        <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
+          <circle
+            cx="50" cy="50" r={r}
+            fill="none" strokeWidth={8}
+            className="stroke-secondary"
+          />
+          {hasValue && (
+            <circle
+              cx="50" cy="50" r={r}
+              fill="none" strokeWidth={8}
+              className={strokeColor(value)}
+              strokeDasharray={c}
+              strokeDashoffset={c - (c * v) / 100}
+              strokeLinecap="round"
+              style={{ transition: 'stroke-dashoffset 400ms ease' }}
+            />
+          )}
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center text-base sm:text-lg font-semibold">
+          {pct(value)}
+        </div>
+      </div>
+      <div className="text-sm font-medium">{label}</div>
+      {sub && (
+        <div className="text-xs font-mono text-muted-foreground truncate max-w-full" title={sub}>
+          {sub}
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface SparkProps {
   data: HistorySample[]
   dataKey: keyof HistorySample
@@ -370,21 +367,15 @@ interface LatencyBlockProps {
   rows: TaskQueryResult[]
   type: LatencyType
   loading: boolean
-  error?: string | null
 }
 
 const ms = (v: number) => `${v.toFixed(1)} ms`
 
-function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) {
-  const isMobile = useIsMobile()
-  const filteredRows = useMemo(() => filterRowsByLatestSeries(rows, type), [rows, type])
+function LatencyBlock({ title, rows, type, loading }: LatencyBlockProps) {
   const { data, series } = useMemo(() => buildLatencyChart(rows, type), [rows, type])
-  const qualityRows = useMemo(
-    () => buildLatencyQualityRows(filteredRows, type, isMobile ? 30 : 60),
-    [filteredRows, type, isMobile],
-  )
+  const stats = useMemo(() => computeLatencyStats(rows, type), [rows, type])
   const [hidden, setHidden] = useState<Set<string>>(() => new Set())
-  const empty = series.length === 0
+  const empty = data.length === 0
 
   const visibleSeries = series.filter(s => !hidden.has(s.name))
 
@@ -400,10 +391,8 @@ function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) 
     <Section title={`${title} · 近 1 小时`}>
       <div className="relative h-60">
         {empty && (
-          <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-center">
-            <div className="max-w-[560px] rounded-xl border border-dashed border-border bg-secondary/30 px-5 py-3 text-center text-xs leading-5 text-muted-foreground">
-              {loading ? '加载中…' : error ? simplifyTaskError(error) : `暂无 ${type} 数据`}
-            </div>
+          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+            {loading ? '加载中…' : `暂无 ${type} 数据`}
           </div>
         )}
         {!empty && (
@@ -450,23 +439,21 @@ function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) 
         )}
       </div>
 
-      {qualityRows.length > 0 && (
-        <div className="mt-4 border-t pt-4">
-          <div className="hidden md:grid grid-cols-[minmax(0,170px)_minmax(0,1fr)_110px_90px_80px] items-center gap-4 px-2 pb-2 text-[11px] text-muted-foreground">
-            <span>来源</span>
-            <span>质量</span>
-            <span className="text-right">平均延迟</span>
-            <span className="text-right">抖动</span>
-            <span className="text-right">丢包率</span>
+      {stats.length > 0 && (
+        <div className="mt-3 border-t pt-3">
+          <div className="flex items-center px-2 pb-1 text-[11px] text-muted-foreground">
+            <span className="flex-1">来源</span>
+            <span className="w-20 text-right">平均延迟</span>
+            <span className="w-16 text-right">抖动</span>
+            <span className="w-14 text-right">丢包率</span>
           </div>
-          <div className="space-y-1.5">
-            {qualityRows.map(row => (
-              <LatencyQualityView
-                key={row.name}
-                row={row}
-                hidden={hidden.has(row.name)}
-                compact={isMobile}
-                onToggle={() => toggle(row.name)}
+          <div className="space-y-0.5">
+            {stats.map(s => (
+              <LatencyStatsRow
+                key={s.name}
+                stat={s}
+                hidden={hidden.has(s.name)}
+                onToggle={() => toggle(s.name)}
               />
             ))}
           </div>
@@ -476,78 +463,48 @@ function LatencyBlock({ title, rows, type, loading, error }: LatencyBlockProps) 
   )
 }
 
-function LatencyQualityView({
-  row,
+function LatencyStatsRow({
+  stat,
   hidden,
-  compact,
   onToggle,
 }: {
-  row: LatencyQualityRow
+  stat: LatencyStats
   hidden: boolean
-  compact: boolean
   onToggle: () => void
 }) {
-  const { name, color, avg, jitter, lossRate, values } = row
-
-  if (compact) {
-    return (
-      <div
-        onClick={onToggle}
-        className={cn(
-          'rounded-xl border border-dashed border-border px-3 py-3 text-xs cursor-pointer transition-opacity active:bg-secondary/30',
-          hidden && 'opacity-35',
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-0.5 w-4 rounded-full shrink-0" style={{ background: color }} />
-          <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
-          <span className="font-mono text-foreground/90">{avg != null ? ms(avg) : '—'}</span>
-        </div>
-        <div className="mt-2 flex h-5 items-stretch gap-[1px] overflow-hidden rounded-md bg-border/55 p-1">
-          {values.map((v, i) => (
-            <span key={i} className="block flex-1 rounded-[1px]" style={{ backgroundColor: qualitySegmentColor(v) }} />
-          ))}
-        </div>
-        <div className="mt-2 flex justify-end gap-4 text-[11px] text-muted-foreground font-mono">
-          <span>抖动 {jitter != null ? ms(jitter) : '—'}</span>
-          <span className={cn(lossRate >= 5 && 'text-red-500 font-medium')}>丢包 {lossRate.toFixed(1)}%</span>
-        </div>
-      </div>
-    )
-  }
+  const { name, color, avg, jitter, lossRate } = stat
 
   return (
     <div
       onClick={onToggle}
       className={cn(
-        'grid grid-cols-[minmax(0,170px)_minmax(0,1fr)_110px_90px_80px] items-center gap-4 rounded-xl px-2 py-2 text-xs cursor-pointer select-none transition-opacity hover:bg-muted/45',
+        'flex items-center px-2 py-1 rounded-md text-xs cursor-pointer select-none transition-opacity hover:bg-muted/60',
         hidden && 'opacity-35',
       )}
     >
-      <span className="flex items-center gap-2 min-w-0">
-        <span className="inline-block w-4 h-0.5 rounded-full shrink-0" style={{ background: color }} />
+      <span className="flex items-center gap-2 flex-1 min-w-0">
+        <span
+          className="inline-block w-4 h-0.5 rounded-full shrink-0"
+          style={{ background: color }}
+        />
         <span className="truncate">{name}</span>
       </span>
-      <div className="flex h-5 items-stretch gap-[1px] overflow-hidden rounded-md bg-border/55 p-1">
-        {values.map((v, i) => (
-          <span key={i} className="block flex-1 rounded-[1px]" style={{ backgroundColor: qualitySegmentColor(v) }} />
-        ))}
-      </div>
-      <span className="text-right tabular-nums font-mono">{avg != null ? ms(avg) : '—'}</span>
-      <span className="text-right tabular-nums font-mono">{jitter != null ? ms(jitter) : '—'}</span>
-      <span className={cn('text-right tabular-nums font-mono', lossRate >= 5 && 'text-red-500 font-medium')}>
+      <span className="w-20 text-right tabular-nums font-mono">
+        {avg != null ? ms(avg) : '—'}
+      </span>
+      <span className="w-16 text-right tabular-nums font-mono">
+        {jitter != null ? ms(jitter) : '—'}
+      </span>
+      <span
+        className={cn(
+          'w-14 text-right tabular-nums font-mono',
+          lossRate >= 5 && 'text-red-500 font-medium',
+        )}
+      >
         {lossRate.toFixed(1)}%
       </span>
     </div>
   )
-}
-
-function simplifyTaskError(error: string) {
-  const lower = error.toLowerCase()
-  if (lower.includes('permission denied') || lower.includes('insufficient permissions')) {
-    return '当前 Token 没有 Task 读取权限，无法展示该图表。'
-  }
-  return `Task 查询失败：${error}`
 }
 
 function CostSection({ meta }: { meta: NodeMeta }) {
