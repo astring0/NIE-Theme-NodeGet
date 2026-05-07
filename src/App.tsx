@@ -284,20 +284,8 @@ export function App() {
           onBackgroundSettingsChange={setBackgroundSettings}
         />
 
-        <main className="flex-1 w-full px-4 sm:px-6 py-6 sm:py-8">
-          <div className="mx-auto w-full max-w-[91.5rem] space-y-6">
-            <div className="mx-auto w-full max-w-6xl space-y-3">
-              {!empty && (
-                <RegionFilter
-                  regions={regions.list}
-                  total={regions.total}
-                  active={activeRegion}
-                  onChange={setActiveRegion}
-                />
-              )}
-              {!empty && <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />}
-            </div>
-
+        <main className="flex-1 w-full px-4 py-4 sm:px-6 sm:py-6">
+          <div className="mx-auto w-full max-w-[91.5rem]">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[18rem_minmax(0,72rem)] xl:justify-center xl:items-start">
               {!empty && (
                 <aside className="order-1 xl:order-1">
@@ -306,6 +294,17 @@ export function App() {
               )}
 
               <section className={`order-2 xl:order-2 min-w-0 space-y-6 ${empty ? 'xl:col-span-2 xl:mx-auto xl:w-full xl:max-w-6xl' : ''}`}>
+                {!empty && (
+                  <div className="space-y-3">
+                    <RegionFilter
+                      regions={regions.list}
+                      total={regions.total}
+                      active={activeRegion}
+                      onChange={setActiveRegion}
+                    />
+                    <TagFilter tags={allTags} active={activeTag} onChange={setActiveTag} />
+                  </div>
+                )}
                 {content}
               </section>
             </div>
