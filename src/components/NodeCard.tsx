@@ -54,27 +54,20 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-x-2 gap-y-3 py-1 sm:grid-cols-4 sm:gap-2">
-          <ResourceRing label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} size={78} strokeWidth={9} />
+        <div className="grid grid-cols-3 gap-x-2 gap-y-3 py-1 sm:gap-3">
+          <ResourceRing label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} size={82} strokeWidth={9} />
           <ResourceRing
             label="内存"
             value={u.mem}
             sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : null}
-            size={78}
+            size={82}
             strokeWidth={9}
           />
           <ResourceRing
             label="磁盘"
             value={u.disk}
             sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : null}
-            size={78}
-            strokeWidth={9}
-          />
-          <ResourceRing
-            label="Swap"
-            value={u.swap}
-            sub={u.swapTotal ? `${bytes(u.swapUsed)} / ${bytes(u.swapTotal)}` : '无 Swap'}
-            size={78}
+            size={82}
             strokeWidth={9}
           />
         </div>
