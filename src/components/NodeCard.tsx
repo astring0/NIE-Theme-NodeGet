@@ -33,7 +33,7 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
     <a ref={ref} href={`#${encodeURIComponent(nodeKey(node))}`} className="block h-full">
       <Card
         className={cn(
-          'group h-full min-h-[360px] sm:min-h-[430px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 node-card-hover hover:border-primary/80 hover:bg-card flex flex-col gap-3.5 sm:gap-4',
+          'group h-full min-h-[360px] sm:min-h-[430px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 hover:border-primary/90 hover:bg-card hover:shadow-[0_0_0_1px_rgba(66,185,131,0.32),0_12px_28px_rgba(15,23,42,0.06)] flex flex-col gap-3.5 sm:gap-4',
           !node.online && 'opacity-75',
         )}
       >
@@ -54,20 +54,27 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-x-2 gap-y-3 py-1 sm:gap-3">
-          <ResourceRing label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} size={82} strokeWidth={9} />
+        <div className="grid grid-cols-2 gap-x-2 gap-y-3 py-1 sm:grid-cols-4 sm:gap-2">
+          <ResourceRing label="CPU" value={u.cpu} sub={cpu || null} subTitle={cpu || undefined} size={78} strokeWidth={9} />
           <ResourceRing
             label="内存"
             value={u.mem}
             sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : null}
-            size={82}
+            size={78}
             strokeWidth={9}
           />
           <ResourceRing
             label="磁盘"
             value={u.disk}
             sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : null}
-            size={82}
+            size={78}
+            strokeWidth={9}
+          />
+          <ResourceRing
+            label="Swap"
+            value={u.swap}
+            sub={u.swapTotal ? `${bytes(u.swapUsed)} / ${bytes(u.swapTotal)}` : '无 Swap'}
+            size={78}
             strokeWidth={9}
           />
         </div>

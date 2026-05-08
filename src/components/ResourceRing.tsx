@@ -56,8 +56,8 @@ export function ResourceRing({
             r={radius}
             fill="none"
             strokeWidth={strokeWidth}
-            stroke="hsl(var(--line-strong) / 0.76)"
-            opacity={0.96}
+            stroke="hsl(var(--border))"
+            opacity={0.95}
           />
           <circle
             cx="50"
@@ -76,7 +76,7 @@ export function ResourceRing({
           className="absolute rounded-full bg-card"
           style={{
             inset: `${innerInsetPercent}%`,
-            boxShadow: '0 0 0 1px hsl(var(--line-soft) / 0.82), inset 0 1px 3px hsl(var(--foreground) / 0.035)',
+            boxShadow: '0 0 0 1px hsl(var(--border) / 0.55)',
           }}
         />
 

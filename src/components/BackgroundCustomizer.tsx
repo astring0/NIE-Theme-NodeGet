@@ -20,13 +20,13 @@ interface Props {
 const DEFAULT_SETTINGS: BackgroundSettings = {
   pattern: 'grid',
   baseColor: '#f5f8fb',
-  accentColor: '#7db4d8',
+  accentColor: '#b7c4d6',
   density: 22,
-  opacity: 0.055,
+  opacity: 0.09,
 }
 
 const PALETTES = [
-  { label: '云白', light: { baseColor: '#f5f8fb', accentColor: '#7db4d8' }, dark: { baseColor: '#111827', accentColor: '#94a3b8' } },
+  { label: '云白', light: { baseColor: '#f5f8fb', accentColor: '#b7c4d6' }, dark: { baseColor: '#111827', accentColor: '#94a3b8' } },
   { label: '薄荷', light: { baseColor: '#f2fbf6', accentColor: '#34d399' }, dark: { baseColor: '#102019', accentColor: '#4ade80' } },
   { label: '海盐蓝', light: { baseColor: '#f2f7ff', accentColor: '#60a5fa' }, dark: { baseColor: '#0f172a', accentColor: '#38bdf8' } },
   { label: '紫雾', light: { baseColor: '#f7f3ff', accentColor: '#a78bfa' }, dark: { baseColor: '#1f1832', accentColor: '#a78bfa' } },
@@ -60,7 +60,7 @@ export function BackgroundCustomizer({ settings, onChange, className }: Props) {
         <DialogHeader>
           <DialogTitle>背景样式</DialogTitle>
           <DialogDescription>
-            当前访客本地生效，保存在浏览器里。背景、卡片线条、圆环底圈等细节会一起轻微跟随，浅色 / 深色模式都会自动适配。
+            当前访客本地生效，保存在浏览器里，不影响别人看到的页面。颜色会自动适配浅色 / 深色模式。
           </DialogDescription>
         </DialogHeader>
 
