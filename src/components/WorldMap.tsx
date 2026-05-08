@@ -1,6 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { geoGraticule10, geoOrthographic, geoPath } from 'd3-geo'
+import { Minus, Plus, RotateCcw } from 'lucide-react'
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps'
+import { feature, mesh } from 'topojson-client'
 import { Card } from './ui/card'
+import { Button } from './ui/button'
 import { bytes, pct, uptime } from '../utils/format'
 import { deriveUsage, displayName } from '../utils/derive'
 import { cn } from '../utils/cn'
@@ -10,6 +14,25 @@ import { nodeKey } from '../utils/nodeKey'
 interface Props {
   nodes: Node[]
   onOpen?: (id: string) => void
+}
+
+interface NodeGroup {
+  key: string
+  lat: number
+  lng: number
+  nodes: Node[]
+}
+
+interface GlobeWorldData {
+  land: any
+  borders: any
+}
+
+interface ProjectedMarker extends NodeGroup {
+  x: number
+  y: number
+  depth: number
+  onlineCount: number
 }
 
 const MAP_W = 900
@@ -36,11 +59,108 @@ const GEO_STYLE = {
 const ptr = { cursor: 'pointer' }
 const CURSOR = { default: ptr, hover: ptr, pressed: ptr }
 
+const GLOBE_MIN_SCALE = 145
+const GLOBE_MAX_SCALE = 320
+const GLOBE_DEFAULT_SCALE = 190
+const GLOBE_DEFAULT_ROTATION: [number, number, number] = [-18, -12, 0]
+
 function groupKey(lat: number, lng: number) {
   return `${lat.toFixed(3)},${lng.toFixed(3)}`
 }
 
+function groupNodes(nodes: Node[]) {
+  const byPos = new Map<string, Node[]>()
+  for (const n of nodes) {
+    if (n.meta?.lat == null || n.meta?.lng == null) continue
+    const k = groupKey(n.meta.lat, n.meta.lng)
+    const list = byPos.get(k)
+    if (list) list.push(n)
+    else byPos.set(k, [n])
+  }
+  return [...byPos.entries()].map(([key, ns]) => ({
+    key,
+    lat: ns[0].meta.lat!,
+    lng: ns[0].meta.lng!,
+    nodes: ns,
+  }))
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value))
+}
+
+function projectVisibleGroup(group: NodeGroup, rotation: [number, number, number], scale: number): ProjectedMarker | null {
+  const projection = geoOrthographic()
+    .translate([MAP_W / 2, MAP_H / 2])
+    .scale(scale)
+    .rotate(rotation)
+    .precision(0.1)
+
+  const point = projection([group.lng, group.lat])
+  if (!point) return null
+
+  const lambda = (group.lng * Math.PI) / 180
+  const phi = (group.lat * Math.PI) / 180
+  const centerLon = (-rotation[0] * Math.PI) / 180
+  const centerLat = (-rotation[1] * Math.PI) / 180
+  const depth = Math.sin(phi) * Math.sin(centerLat) + Math.cos(phi) * Math.cos(centerLat) * Math.cos(lambda - centerLon)
+  if (depth <= 0) return null
+
+  return {
+    ...group,
+    x: point[0],
+    y: point[1],
+    depth,
+    onlineCount: group.nodes.filter(node => node.online).length,
+  }
+}
+
 export function WorldMap({ nodes, onOpen }: Props) {
+  const [mode, setMode] = useState<'2d' | '3d'>('2d')
+  const groups = useMemo(() => groupNodes(nodes), [nodes])
+  const total = groups.reduce((sum, group) => sum + group.nodes.length, 0)
+
+  return (
+    <Card className="p-3 sm:p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center rounded-xl border border-border/70 bg-secondary/55 p-1 shadow-sm">
+          <button
+            type="button"
+            className={cn(
+              'rounded-lg px-4 py-2 text-sm font-black transition-colors',
+              mode === '2d' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+            onClick={() => setMode('2d')}
+          >
+            2D Map
+          </button>
+          <button
+            type="button"
+            className={cn(
+              'rounded-lg px-4 py-2 text-sm font-black transition-colors',
+              mode === '3d' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+            onClick={() => setMode('3d')}
+          >
+            3D Map
+          </button>
+        </div>
+
+        <div className="text-sm font-semibold text-muted-foreground">
+          当前显示 <span className="font-black text-foreground">{total}</span> 个节点
+        </div>
+      </div>
+
+      {mode === '2d' ? (
+        <FlatWorldMap groups={groups} total={total} onOpen={onOpen} />
+      ) : (
+        <Globe3DMap groups={groups} total={total} onOpen={onOpen} />
+      )}
+    </Card>
+  )
+}
+
+function FlatWorldMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: number; onOpen?: (id: string) => void }) {
   const [hoverKey, setHoverKey] = useState<string | null>(null)
   const closeTimer = useRef<number | null>(null)
 
@@ -56,163 +176,470 @@ export function WorldMap({ nodes, onOpen }: Props) {
     closeTimer.current = window.setTimeout(() => setHoverKey(null), 140)
   }
 
-  const groups = useMemo(() => {
-    const byPos = new Map<string, Node[]>()
-    for (const n of nodes) {
-      if (n.meta?.lat == null || n.meta?.lng == null) continue
-      const k = groupKey(n.meta.lat, n.meta.lng)
-      const list = byPos.get(k)
-      if (list) list.push(n)
-      else byPos.set(k, [n])
-    }
-    return [...byPos.entries()].map(([key, ns]) => ({
-      key,
-      lat: ns[0].meta.lat!,
-      lng: ns[0].meta.lng!,
-      nodes: ns,
-    }))
-  }, [nodes])
-
-  const total = groups.reduce((s, g) => s + g.nodes.length, 0)
-
   return (
-    <Card className="p-3 sm:p-4">
-      <div
-        className="relative w-full overflow-hidden rounded-md border border-border/60 bg-background/40 text-foreground"
-        style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
-        onClick={() => setHoverKey(null)}
+    <div
+      className="relative w-full overflow-hidden rounded-md border border-border/60 bg-background/40 text-foreground"
+      style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
+      onClick={() => setHoverKey(null)}
+    >
+      <ComposableMap
+        projection="geoEqualEarth"
+        projectionConfig={{ scale: 175 }}
+        width={MAP_W}
+        height={MAP_H}
+        style={{ width: '100%', height: '100%' }}
       >
-        <ComposableMap
-          projection="geoEqualEarth"
-          projectionConfig={{ scale: 175 }}
-          width={MAP_W}
-          height={MAP_H}
-          style={{ width: '100%', height: '100%' }}
-        >
-          <defs>
-            <pattern id="map-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeOpacity="0.07" strokeWidth="0.5" />
-            </pattern>
-            <radialGradient id="map-vignette" cx="50%" cy="50%" r="75%">
-              <stop offset="55%" stopColor="hsl(var(--background))" stopOpacity="0" />
-              <stop offset="100%" stopColor="hsl(var(--background))" stopOpacity="0.55" />
-            </radialGradient>
-            <filter id="dot-glow" x="-200%" y="-200%" width="400%" height="400%">
-              <feGaussianBlur stdDeviation="2" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
+        <defs>
+          <pattern id="map-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeOpacity="0.07" strokeWidth="0.5" />
+          </pattern>
+          <radialGradient id="map-vignette" cx="50%" cy="50%" r="75%">
+            <stop offset="55%" stopColor="hsl(var(--background))" stopOpacity="0" />
+            <stop offset="100%" stopColor="hsl(var(--background))" stopOpacity="0.55" />
+          </radialGradient>
+          <filter id="dot-glow" x="-200%" y="-200%" width="400%" height="400%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
 
-          <rect x="0" y="0" width={MAP_W} height={MAP_H} fill="url(#map-grid)" />
+        <rect x="0" y="0" width={MAP_W} height={MAP_H} fill="url(#map-grid)" />
 
-          <Geographies geography={GEO_URL}>
-            {({ geographies }) =>
-              geographies.map(geo => (
-                <Geography key={geo.rsmKey} geography={geo} style={GEO_STYLE} />
-              ))
-            }
-          </Geographies>
+        <Geographies geography={GEO_URL}>
+          {({ geographies }) =>
+            geographies.map(geo => (
+              <Geography key={geo.rsmKey} geography={geo} style={GEO_STYLE} />
+            ))
+          }
+        </Geographies>
 
-          {groups.map(g => {
-            const isCluster = g.nodes.length > 1
-            const onlineCount = g.nodes.filter(n => n.online).length
-            const color = onlineCount > 0 ? GREEN : GRAY
-            const isOpen = hoverKey === g.key
+        {groups.map(g => {
+          const isCluster = g.nodes.length > 1
+          const onlineCount = g.nodes.filter(n => n.online).length
+          const color = onlineCount > 0 ? GREEN : GRAY
+          const isOpen = hoverKey === g.key
 
-            return (
-              <Marker
-                key={g.key}
-                coordinates={[g.lng, g.lat]}
-                onMouseEnter={() => {
-                  cancelClose()
-                  setHoverKey(g.key)
-                }}
-                onMouseLeave={scheduleClose}
-                onClick={(e: any) => {
-                  e.stopPropagation?.()
-                  if (isCluster) setHoverKey(isOpen ? null : g.key)
-                  else onOpen?.(nodeKey(g.nodes[0]))
-                }}
-                style={CURSOR}
-              >
-                <circle r={20} fill="transparent" />
+          return (
+            <Marker
+              key={g.key}
+              coordinates={[g.lng, g.lat]}
+              onMouseEnter={() => {
+                cancelClose()
+                setHoverKey(g.key)
+              }}
+              onMouseLeave={scheduleClose}
+              onClick={(e: any) => {
+                e.stopPropagation?.()
+                if (isCluster) setHoverKey(isOpen ? null : g.key)
+                else onOpen?.(nodeKey(g.nodes[0]))
+              }}
+              style={CURSOR}
+            >
+              <circle r={20} fill="transparent" />
 
-                <circle
-                  r={isOpen ? 17 : 11}
-                  fill="none"
-                  stroke={color}
-                  strokeOpacity={isOpen ? 0.42 : 0.32}
-                  strokeWidth="1.15"
-                  style={{ transition: 'r 0.25s ease' }}
+              <circle
+                r={isOpen ? 17 : 11}
+                fill="none"
+                stroke={color}
+                strokeOpacity={isOpen ? 0.42 : 0.32}
+                strokeWidth="1.15"
+                style={{ transition: 'r 0.25s ease' }}
+              />
+              <circle
+                r={isOpen ? 24 : 15}
+                fill="none"
+                stroke={color}
+                strokeOpacity={isOpen ? 0.18 : 0.08}
+                strokeWidth="0.9"
+                style={{ transition: 'r 0.25s ease' }}
+              />
+
+              {onlineCount > 0 && (
+                <circle r={10} fill={color} opacity={0.16}>
+                  <animate attributeName="r" values="7;15;7" dur="2.4s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.28;0.02;0.28" dur="2.4s" repeatCount="indefinite" />
+                </circle>
+              )}
+
+              <circle
+                r={isCluster ? 8.5 : isOpen ? 5.2 : 4.2}
+                fill={color}
+                stroke="white"
+                strokeWidth={isCluster ? 1.3 : 1.1}
+                filter="url(#dot-glow)"
+              />
+
+              {isCluster && (
+                <text y={2.6} textAnchor="middle" fontSize={8.4} fontWeight={700} fill="white" style={{ pointerEvents: 'none' }}>
+                  {g.nodes.length}
+                </text>
+              )}
+
+              {isOpen && (
+                <MapNodePopoverSvg
+                  nodes={g.nodes}
+                  lat={g.lat}
+                  lng={g.lng}
+                  onPick={id => {
+                    setHoverKey(null)
+                    onOpen?.(id)
+                  }}
+                  onMouseEnter={cancelClose}
+                  onMouseLeave={scheduleClose}
                 />
-                <circle
-                  r={isOpen ? 24 : 15}
-                  fill="none"
-                  stroke={color}
-                  strokeOpacity={isOpen ? 0.18 : 0.08}
-                  strokeWidth="0.9"
-                  style={{ transition: 'r 0.25s ease' }}
-                />
+              )}
+            </Marker>
+          )
+        })}
 
-                {onlineCount > 0 && (
-                  <circle r={10} fill={color} opacity={0.16}>
-                    <animate attributeName="r" values="7;15;7" dur="2.4s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.28;0.02;0.28" dur="2.4s" repeatCount="indefinite" />
-                  </circle>
-                )}
+        <rect x="0" y="0" width={MAP_W} height={MAP_H} fill="url(#map-vignette)" pointerEvents="none" />
+      </ComposableMap>
 
-                <circle
-                  r={isCluster ? 8.5 : isOpen ? 5.2 : 4.2}
-                  fill={color}
-                  stroke="white"
-                  strokeWidth={isCluster ? 1.3 : 1.1}
-                  filter="url(#dot-glow)"
-                />
-
-                {isCluster && (
-                  <text y={2.6} textAnchor="middle" fontSize={8.4} fontWeight={700} fill="white" style={{ pointerEvents: 'none' }}>
-                    {g.nodes.length}
-                  </text>
-                )}
-
-                {isOpen && (
-                  <MapNodePopover
-                    nodes={g.nodes}
-                    lat={g.lat}
-                    lng={g.lng}
-                    onPick={id => {
-                      setHoverKey(null)
-                      onOpen?.(id)
-                    }}
-                    onMouseEnter={cancelClose}
-                    onMouseLeave={scheduleClose}
-                  />
-                )}
-              </Marker>
-            )
-          })}
-
-          <rect x="0" y="0" width={MAP_W} height={MAP_H} fill="url(#map-vignette)" pointerEvents="none" />
-        </ComposableMap>
-
-        {total === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">
-            没有节点设置过经纬度
-          </div>
-        )}
-
-        <div className="absolute bottom-3 right-4 font-mono text-sm font-semibold tracking-wider text-foreground pointer-events-none uppercase">
-          {total} nodes
+      {total === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">
+          没有节点设置过经纬度
         </div>
-      </div>
-    </Card>
+      )}
+    </div>
   )
 }
 
-function MapNodePopover({
+function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: number; onOpen?: (id: string) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [world, setWorld] = useState<GlobeWorldData | null>(null)
+  const [scale, setScale] = useState(GLOBE_DEFAULT_SCALE)
+  const [rotation, setRotation] = useState<[number, number, number]>(GLOBE_DEFAULT_ROTATION)
+  const [hoverKey, setHoverKey] = useState<string | null>(null)
+  const closeTimer = useRef<number | null>(null)
+  const dragRef = useRef<{ x: number; y: number; rotation: [number, number, number] } | null>(null)
+  const pinchRef = useRef<{ distance: number; scale: number } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch(GEO_URL)
+      .then(res => res.json())
+      .then(topology => {
+        if (cancelled) return
+        const land = feature(topology, topology.objects.land)
+        const borders = mesh(topology, topology.objects.countries, (a, b) => a !== b)
+        setWorld({ land, borders })
+      })
+      .catch(() => {
+        if (!cancelled) setWorld(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const projected = useMemo(() => {
+    return groups
+      .map(group => projectVisibleGroup(group, rotation, scale))
+      .filter((item): item is ProjectedMarker => Boolean(item))
+      .sort((a, b) => a.depth - b.depth)
+  }, [groups, rotation, scale])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !world) return
+
+    const ratio = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+    canvas.width = MAP_W * ratio
+    canvas.height = MAP_H * ratio
+    const context = canvas.getContext('2d')
+    if (!context) return
+    context.setTransform(ratio, 0, 0, ratio, 0, 0)
+    context.clearRect(0, 0, MAP_W, MAP_H)
+
+    const projection = geoOrthographic()
+      .translate([MAP_W / 2, MAP_H / 2])
+      .scale(scale)
+      .rotate(rotation)
+      .precision(0.1)
+
+    const path = geoPath(projection, context)
+    const graticule = geoGraticule10()
+
+    const background = context.createLinearGradient(0, 0, MAP_W, MAP_H)
+    background.addColorStop(0, 'rgba(226,232,240,0.12)')
+    background.addColorStop(0.5, 'rgba(248,250,252,0.04)')
+    background.addColorStop(1, 'rgba(226,232,240,0.12)')
+    context.fillStyle = background
+    context.fillRect(0, 0, MAP_W, MAP_H)
+
+    context.save()
+    context.beginPath()
+    path({ type: 'Sphere' } as any)
+    context.fillStyle = 'rgba(203,213,225,0.78)'
+    context.fill()
+    context.shadowColor = 'rgba(15,23,42,0.12)'
+    context.shadowBlur = 28
+    context.strokeStyle = 'rgba(148,163,184,0.45)'
+    context.lineWidth = 1.2
+    context.stroke()
+    context.clip()
+
+    const sphereShade = context.createRadialGradient(MAP_W * 0.4, MAP_H * 0.34, scale * 0.12, MAP_W * 0.52, MAP_H * 0.48, scale * 1.08)
+    sphereShade.addColorStop(0, 'rgba(255,255,255,0.36)')
+    sphereShade.addColorStop(0.5, 'rgba(255,255,255,0.08)')
+    sphereShade.addColorStop(1, 'rgba(15,23,42,0.16)')
+    context.fillStyle = sphereShade
+    context.fillRect(0, 0, MAP_W, MAP_H)
+
+    context.beginPath()
+    path(graticule as any)
+    context.strokeStyle = 'rgba(148,163,184,0.14)'
+    context.lineWidth = 0.7
+    context.stroke()
+
+    context.beginPath()
+    path(world.land)
+    context.fillStyle = 'rgba(100,116,139,0.72)'
+    context.fill()
+
+    context.beginPath()
+    path(world.borders)
+    context.strokeStyle = 'rgba(226,232,240,0.32)'
+    context.lineWidth = 0.65
+    context.stroke()
+
+    context.restore()
+
+    context.beginPath()
+    path({ type: 'Sphere' } as any)
+    context.strokeStyle = 'rgba(191,219,254,0.48)'
+    context.lineWidth = 1
+    context.stroke()
+  }, [rotation, scale, world])
+
+  function cancelClose() {
+    if (closeTimer.current != null) {
+      clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }
+
+  function scheduleClose() {
+    cancelClose()
+    closeTimer.current = window.setTimeout(() => setHoverKey(null), 180)
+  }
+
+  function applyScale(next: number) {
+    setScale(clamp(next, GLOBE_MIN_SCALE, GLOBE_MAX_SCALE))
+  }
+
+  function onMouseDown(event: React.MouseEvent<HTMLCanvasElement>) {
+    dragRef.current = { x: event.clientX, y: event.clientY, rotation }
+  }
+
+  useEffect(() => {
+    const onMove = (event: MouseEvent) => {
+      if (!dragRef.current) return
+      const dx = event.clientX - dragRef.current.x
+      const dy = event.clientY - dragRef.current.y
+      setRotation([
+        dragRef.current.rotation[0] + dx * 0.38,
+        clamp(dragRef.current.rotation[1] - dy * 0.32, -75, 75),
+        0,
+      ])
+    }
+    const onUp = () => {
+      dragRef.current = null
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  function onTouchStart(event: React.TouchEvent<HTMLCanvasElement>) {
+    if (event.touches.length === 1) {
+      const touch = event.touches[0]
+      dragRef.current = { x: touch.clientX, y: touch.clientY, rotation }
+      pinchRef.current = null
+      return
+    }
+    if (event.touches.length >= 2) {
+      const a = event.touches[0]
+      const b = event.touches[1]
+      pinchRef.current = {
+        distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        scale,
+      }
+      dragRef.current = null
+    }
+  }
+
+  function onTouchMove(event: React.TouchEvent<HTMLCanvasElement>) {
+    if (event.touches.length === 1 && dragRef.current) {
+      const touch = event.touches[0]
+      const dx = touch.clientX - dragRef.current.x
+      const dy = touch.clientY - dragRef.current.y
+      setRotation([
+        dragRef.current.rotation[0] + dx * 0.4,
+        clamp(dragRef.current.rotation[1] - dy * 0.34, -75, 75),
+        0,
+      ])
+      return
+    }
+    if (event.touches.length >= 2 && pinchRef.current) {
+      const a = event.touches[0]
+      const b = event.touches[1]
+      const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+      const ratio = distance / pinchRef.current.distance
+      applyScale(pinchRef.current.scale * ratio)
+    }
+  }
+
+  function resetView() {
+    setRotation(GLOBE_DEFAULT_ROTATION)
+    setScale(GLOBE_DEFAULT_SCALE)
+    setHoverKey(null)
+  }
+
+  return (
+    <div
+      className="relative w-full overflow-hidden rounded-md border border-border/60 bg-background/45 text-foreground"
+      style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
+      onClick={() => setHoverKey(null)}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.24),transparent_64%)]" />
+
+      <canvas
+        ref={canvasRef}
+        width={MAP_W}
+        height={MAP_H}
+        className="absolute inset-0 h-full w-full touch-none cursor-grab active:cursor-grabbing"
+        onMouseDown={onMouseDown}
+        onWheel={event => {
+          event.preventDefault()
+          applyScale(scale - event.deltaY * 0.08)
+        }}
+        onTouchStart={onTouchStart}
+        onTouchMove={event => {
+          event.preventDefault()
+          onTouchMove(event)
+        }}
+        onTouchEnd={() => {
+          dragRef.current = null
+          pinchRef.current = null
+        }}
+      />
+
+      <div className="absolute left-3 top-3 z-10 rounded-xl border border-border/80 bg-background/90 px-3 py-2 text-xs font-semibold text-muted-foreground shadow-sm backdrop-blur">
+        拖动旋转，滚轮 / 双指 / 按钮缩放
+      </div>
+
+      <div className="absolute right-3 top-3 z-10 flex flex-col gap-2">
+        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92" onClick={e => { e.stopPropagation(); applyScale(scale + 16) }}>
+          <Plus className="h-4 w-4" />
+        </Button>
+        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92" onClick={e => { e.stopPropagation(); applyScale(scale - 16) }}>
+          <Minus className="h-4 w-4" />
+        </Button>
+        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92" onClick={e => { e.stopPropagation(); resetView() }}>
+          <RotateCcw className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="absolute inset-0 pointer-events-none">
+        {projected.map(group => {
+          const isCluster = group.nodes.length > 1
+          const isOpen = hoverKey === group.key
+          const color = group.onlineCount > 0 ? GREEN : GRAY
+
+          return (
+            <div
+              key={group.key}
+              className="absolute pointer-events-auto"
+              style={{ left: `${(group.x / MAP_W) * 100}%`, top: `${(group.y / MAP_H) * 100}%`, transform: 'translate(-50%, -50%)' }}
+              onMouseEnter={() => {
+                cancelClose()
+                setHoverKey(group.key)
+              }}
+              onMouseLeave={scheduleClose}
+            >
+              <button
+                type="button"
+                className="relative flex h-8 w-8 items-center justify-center"
+                onClick={event => {
+                  event.stopPropagation()
+                  if (isCluster) setHoverKey(isOpen ? null : group.key)
+                  else onOpen?.(nodeKey(group.nodes[0]))
+                }}
+                aria-label={isCluster ? `${group.nodes.length} 个节点` : displayName(group.nodes[0])}
+              >
+                <span
+                  className="absolute rounded-full"
+                  style={{
+                    width: isOpen ? 28 : 22,
+                    height: isOpen ? 28 : 22,
+                    border: `1.2px solid ${color}`,
+                    opacity: isOpen ? 0.46 : 0.34,
+                  }}
+                />
+                <span
+                  className="absolute rounded-full"
+                  style={{
+                    width: isOpen ? 38 : 30,
+                    height: isOpen ? 38 : 30,
+                    border: `1px solid ${color}`,
+                    opacity: isOpen ? 0.2 : 0.1,
+                  }}
+                />
+                {group.onlineCount > 0 && <span className="absolute h-5 w-5 animate-ping rounded-full" style={{ backgroundColor: color, opacity: 0.18 }} />}
+                <span
+                  className="relative flex items-center justify-center rounded-full text-[10px] font-black text-white shadow-[0_0_12px_rgba(15,23,42,0.25)]"
+                  style={{
+                    width: isCluster ? 16 : isOpen ? 10 : 9,
+                    height: isCluster ? 16 : isOpen ? 10 : 9,
+                    backgroundColor: color,
+                    border: '1.1px solid rgba(255,255,255,0.95)',
+                  }}
+                >
+                  {isCluster ? group.nodes.length : ''}
+                </span>
+              </button>
+
+              {isOpen && (
+                <MapNodePopoverHtml
+                  nodes={group.nodes}
+                  x={group.x}
+                  y={group.y}
+                  onPick={id => {
+                    setHoverKey(null)
+                    onOpen?.(id)
+                  }}
+                  onMouseEnter={cancelClose}
+                  onMouseLeave={scheduleClose}
+                />
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {total === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">
+          没有节点设置过经纬度
+        </div>
+      )}
+
+      {!world && total > 0 && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground pointer-events-none">
+          正在加载 3D 地球…
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MapNodePopoverSvg({
   nodes,
   lat,
   lng,
@@ -241,49 +668,96 @@ function MapNodePopover({
 
   return (
     <foreignObject x={x} y={y} width={width} height={height} style={{ overflow: 'visible' }}>
-      <div
-        className="rounded-sm border border-border/90 bg-card/95 text-card-foreground shadow-[0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur py-1.5 px-1.5 max-h-[334px] overflow-auto"
-        onClick={e => e.stopPropagation()}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      >
-        {nodes.map((n, index) => {
-          const u = deriveUsage(n)
-          return (
-            <button
-              key={nodeKey(n)}
-              onClick={() => onPick(nodeKey(n))}
-              className={cn(
-                'w-full rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-accent/70',
-                index !== nodes.length - 1 && 'border-b border-dashed border-border/80',
-              )}
-            >
-              <div className="flex items-start gap-2">
-                <span className={cn('mt-1 h-1.5 w-1.5 rounded-full shrink-0', n.online ? 'bg-emerald-500' : 'bg-slate-400')} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[12px] font-bold text-foreground">{displayName(n)}</span>
-                    <span className="shrink-0 text-[10px] font-semibold text-muted-foreground uppercase">{n.meta?.region || '—'}</span>
-                  </div>
-                  <div className="mt-0.5 text-[10px] text-muted-foreground">{n.source}</div>
-                  <div className="mt-2 grid grid-cols-[34px_1fr] gap-x-2 gap-y-0.5 text-[10px] leading-4">
-                    <span className="text-muted-foreground">CPU</span>
-                    <span className="font-mono text-right">{pct(u.cpu)}</span>
-                    <span className="text-muted-foreground">内存</span>
-                    <span className="font-mono text-right">{pct(u.mem)}</span>
-                    <span className="text-muted-foreground">↑ 入</span>
-                    <span className="font-mono text-right">{bytes(u.netIn)}/s</span>
-                    <span className="text-muted-foreground">↓ 出</span>
-                    <span className="font-mono text-right">{bytes(u.netOut)}/s</span>
-                    <span className="text-muted-foreground">运行</span>
-                    <span className="font-mono text-right">{uptime(u.uptime)}</span>
-                  </div>
+      <MapNodePopoverCard nodes={nodes} onPick={onPick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} />
+    </foreignObject>
+  )
+}
+
+function MapNodePopoverHtml({
+  nodes,
+  x,
+  y,
+  onPick,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  nodes: Node[]
+  x: number
+  y: number
+  onPick: (id: string) => void
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+}) {
+  const openLeft = x > MAP_W * 0.72
+  const openTop = y > MAP_H * 0.58
+
+  return (
+    <div
+      className={cn(
+        'absolute z-20 w-[220px]',
+        openLeft ? 'right-5' : 'left-5',
+        openTop ? 'bottom-5' : 'top-5',
+      )}
+    >
+      <MapNodePopoverCard nodes={nodes} onPick={onPick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} />
+    </div>
+  )
+}
+
+function MapNodePopoverCard({
+  nodes,
+  onPick,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  nodes: Node[]
+  onPick: (id: string) => void
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+}) {
+  return (
+    <div
+      className="rounded-sm border border-border/90 bg-card/95 text-card-foreground shadow-[0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur py-1.5 px-1.5 max-h-[334px] overflow-auto"
+      onClick={e => e.stopPropagation()}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
+      {nodes.map((n, index) => {
+        const u = deriveUsage(n)
+        return (
+          <button
+            key={nodeKey(n)}
+            onClick={() => onPick(nodeKey(n))}
+            className={cn(
+              'w-full rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-accent/70',
+              index !== nodes.length - 1 && 'border-b border-dashed border-border/80',
+            )}
+          >
+            <div className="flex items-start gap-2">
+              <span className={cn('mt-1 h-1.5 w-1.5 rounded-full shrink-0', n.online ? 'bg-emerald-500' : 'bg-slate-400')} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-[12px] font-bold text-foreground">{displayName(n)}</span>
+                  <span className="shrink-0 text-[10px] font-semibold text-muted-foreground uppercase">{n.meta?.region || '—'}</span>
+                </div>
+                <div className="mt-0.5 text-[10px] text-muted-foreground">{n.source}</div>
+                <div className="mt-2 grid grid-cols-[34px_1fr] gap-x-2 gap-y-0.5 text-[10px] leading-4">
+                  <span className="text-muted-foreground">CPU</span>
+                  <span className="font-mono text-right">{pct(u.cpu)}</span>
+                  <span className="text-muted-foreground">内存</span>
+                  <span className="font-mono text-right">{pct(u.mem)}</span>
+                  <span className="text-muted-foreground">↑ 入</span>
+                  <span className="font-mono text-right">{bytes(u.netIn)}/s</span>
+                  <span className="text-muted-foreground">↓ 出</span>
+                  <span className="font-mono text-right">{bytes(u.netOut)}/s</span>
+                  <span className="text-muted-foreground">运行</span>
+                  <span className="font-mono text-right">{uptime(u.uptime)}</span>
                 </div>
               </div>
-            </button>
-          )
-        })}
-      </div>
-    </foreignObject>
+            </div>
+          </button>
+        )
+      })}
+    </div>
   )
 }
