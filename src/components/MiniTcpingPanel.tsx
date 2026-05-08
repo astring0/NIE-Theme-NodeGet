@@ -20,7 +20,7 @@ interface Props {
 interface SeriesSummary {
   name: string
   label: string
-  values: (number | null)[]
+  values: (number | null | undefined)[]
   avg: number | null
   jitter: number | null
   lossRate: number
@@ -62,7 +62,7 @@ function TcpingRow({ item }: { item: SeriesSummary }) {
             key={i}
             className="block flex-1 rounded-[1px]"
             style={{ backgroundColor: qualitySegmentColor(v) }}
-            title={`${item.label} ${v == null ? '丢包/无数据' : `${v.toFixed(1)} ms`}`}
+            title={`${item.label} ${v === undefined ? '无数据' : v == null ? '丢包' : `${v.toFixed(1)} ms`}`}
           />
         ))}
       </div>

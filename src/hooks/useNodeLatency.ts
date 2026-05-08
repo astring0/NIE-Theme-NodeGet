@@ -9,7 +9,7 @@ const WINDOW_MS = 60 * 60 * 1000
 const REFRESH_MS = 120_000
 const QUERY_TIMEOUT_MS = 20_000
 const CACHE_LIMIT = 1200
-const QUERY_LIMIT = 120
+const QUERY_LIMIT = 500
 
 export interface LatencyQueryState {
   pingData: TaskQueryResult[]

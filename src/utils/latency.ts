@@ -38,7 +38,8 @@ export function latencyColor(name: string) {
   return COLORS[h % COLORS.length]
 }
 
-export function qualitySegmentColor(v: number | null) {
+export function qualitySegmentColor(v: number | null | undefined) {
+  if (v === undefined) return 'rgba(148, 163, 184, 0.36)'
   if (v == null) return LATENCY_BUCKET_COLORS.deepRed
   if (v <= 45) return LATENCY_BUCKET_COLORS.deepGreen
   if (v <= 90) return LATENCY_BUCKET_COLORS.lightGreen
@@ -168,7 +169,7 @@ export interface LatencyStats {
 }
 
 export interface LatencyQualityRow extends LatencyStats {
-  values: (number | null)[]
+  values: (number | null | undefined)[]
 }
 
 export interface LatencyBucketOptions {
@@ -246,8 +247,9 @@ function jitter(values: number[]) {
   return values.slice(1).reduce((sum, v, i) => sum + Math.abs(v - values[i]), 0) / (values.length - 1)
 }
 
-function lossRateFromValues(values: (number | null)[]) {
-  return values.length ? (values.filter(v => v == null).length / values.length) * 100 : 0
+function lossRateFromValues(values: (number | null | undefined)[]) {
+  const observed = values.filter(v => v !== undefined)
+  return observed.length ? (observed.filter(v => v == null).length / observed.length) * 100 : 0
 }
 
 export function latencyRowsToHistory(rows: TaskQueryResult[], type: LatencyType) {
@@ -324,10 +326,7 @@ export function buildLatencyQualityRows(
   return names
     .map<LatencyQualityRow>(name => {
       const buckets = bySeries.get(name) || []
-      const values = buckets.map(bucket => {
-        const value = bucketValue(bucket)
-        return value === undefined ? null : value
-      })
+      const values = buckets.map(bucket => bucketValue(bucket, false))
       const valid = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
       return {
         name,

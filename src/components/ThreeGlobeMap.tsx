@@ -65,6 +65,7 @@ interface HoverState {
   group: NodeGroup
   x: number
   y: number
+  pinned?: boolean
 }
 
 const WORLD_MAP_URL = `${import.meta.env.BASE_URL}geo/world.json`
@@ -388,9 +389,9 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
     }
   }
 
-  function scheduleHide() {
+  function scheduleHide(delay = 80) {
     clearHideTimer()
-    hideTimerRef.current = window.setTimeout(() => setHover(null), 120)
+    hideTimerRef.current = window.setTimeout(() => setHover(null), delay)
   }
 
   function setMarkerState(marker: THREE.Group | null, hovered: boolean) {
@@ -572,7 +573,8 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
         const clearHover = () => {
           if (hoveredMarkerRef.current) setMarkerState(hoveredMarkerRef.current, false)
           hoveredMarkerRef.current = null
-          scheduleHide()
+          clearHideTimer()
+          setHover(current => (current?.pinned ? current : null))
           renderer.domElement.style.cursor = 'grab'
         }
 
@@ -596,6 +598,7 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
             group: marker.userData.group as NodeGroup,
             x: event.clientX - rect.left,
             y: event.clientY - rect.top,
+            pinned: false,
           })
         }
 
@@ -608,7 +611,10 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
           if (!marker) return
           const group = marker.userData.group as NodeGroup
           if (group.nodes.length === 1) onOpenRef.current?.(nodeKey(group.nodes[0]))
-          else setHover({ group, x: event.clientX - rect.left, y: event.clientY - rect.top })
+          else {
+            clearHideTimer()
+            setHover({ group, x: event.clientX - rect.left, y: event.clientY - rect.top, pinned: true })
+          }
         }
 
         const preventWheelScroll = (event: WheelEvent) => event.preventDefault()
@@ -715,7 +721,7 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
         'dark:bg-[linear-gradient(180deg,rgba(7,17,29,0.96),rgba(2,8,20,0.98))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_0_0_1px_rgba(34,211,238,0.04),0_22px_60px_rgba(2,8,23,0.4)]',
       )}
       style={{ aspectRatio: '900 / 460' }}
-      onMouseLeave={scheduleHide}
+      onMouseLeave={() => { clearHideTimer(); setHover(null) }}
     >
       <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(100,116,139,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(100,116,139,0.045)_1px,transparent_1px)] [background-size:40px_40px] [mask-image:radial-gradient(circle_at_50%_50%,rgba(0,0,0,0.88),transparent_100%)] dark:opacity-45 dark:[background-image:linear-gradient(rgba(103,232,249,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(103,232,249,0.05)_1px,transparent_1px)]" />
       <div className="pointer-events-none absolute left-[0.9rem] top-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-tl-[0.6rem] border-l-2 border-t-2 border-sky-200/80 dark:border-cyan-300/35" />
@@ -727,14 +733,14 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
 
       {hover && (
         <div
-          className="absolute z-20 w-[220px]"
+          className={cn('absolute z-20 w-[220px]', hover.pinned ? 'pointer-events-auto' : 'pointer-events-none')}
           style={{
             left: hover.x,
             top: hover.y,
             transform: `translate(${hover.x > 620 ? 'calc(-100% - 16px)' : '16px'}, ${hover.y > 285 ? 'calc(-100% - 16px)' : '16px'})`,
           }}
-          onMouseEnter={clearHideTimer}
-          onMouseLeave={scheduleHide}
+          onMouseEnter={hover.pinned ? clearHideTimer : undefined}
+          onMouseLeave={hover.pinned ? () => scheduleHide(140) : undefined}
         >
           <MapNodePopoverCard
             nodes={hover.group.nodes}
@@ -742,8 +748,8 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
               setHover(null)
               onOpenRef.current?.(id)
             }}
-            onMouseEnter={clearHideTimer}
-            onMouseLeave={scheduleHide}
+            onMouseEnter={hover.pinned ? clearHideTimer : undefined}
+            onMouseLeave={hover.pinned ? () => scheduleHide(140) : undefined}
           />
         </div>
       )}
