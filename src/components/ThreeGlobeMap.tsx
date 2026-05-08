@@ -253,18 +253,21 @@ function buildEarthTextureCanvas(geoJson: GeoJson, colors: GlobePalette) {
 
 function buildGlowTexture(colors: GlobePalette) {
   const canvas = document.createElement('canvas')
-  canvas.width = 128
-  canvas.height = 128
+  canvas.width = 256
+  canvas.height = 256
   const ctx = canvas.getContext('2d')
   if (!ctx) return canvas
 
-  const gradient = ctx.createRadialGradient(64, 64, 6, 64, 64, 64)
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)')
-  gradient.addColorStop(0.18, `rgba(${colors.glowTextureRgb}, 0.92)`)
-  gradient.addColorStop(0.55, `rgba(${colors.glowTextureRgb}, 0.24)`)
+  ctx.clearRect(0, 0, 256, 256)
+  const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 126)
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 0.72)')
+  gradient.addColorStop(0.12, `rgba(${colors.glowTextureRgb}, 0.30)`)
+  gradient.addColorStop(0.34, `rgba(${colors.glowTextureRgb}, 0.13)`)
+  gradient.addColorStop(0.58, `rgba(${colors.glowTextureRgb}, 0.045)`)
+  gradient.addColorStop(0.82, `rgba(${colors.glowTextureRgb}, 0.012)`)
   gradient.addColorStop(1, `rgba(${colors.glowTextureRgb}, 0)`)
   ctx.fillStyle = gradient
-  ctx.fillRect(0, 0, 128, 128)
+  ctx.fillRect(0, 0, 256, 256)
   return canvas
 }
 
@@ -452,11 +455,11 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
           map: glowTexture,
           color: onlineCount > 0 ? colors.markerGlow : colors.markerGlowOffline,
           transparent: true,
-          opacity: 0.42,
+          opacity: 0.2,
           depthWrite: false,
         }),
       )
-      glow.scale.setScalar(marker.userData.baseGlowScale * 1.4)
+      glow.scale.setScalar(marker.userData.baseGlowScale * 1.75)
 
       const core = new THREE.Mesh(
         new THREE.SphereGeometry(0.025 + Math.min(group.nodes.length * 0.004, 0.018), 24, 24),
@@ -638,7 +641,7 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
           camera.getWorldDirection(cameraDirection)
           cameraDirection.multiplyScalar(-1).normalize()
 
-          const pulse = 0.96 + Math.sin(time / 950) * 0.04
+          const pulse = 0.985 + Math.sin(time / 1700) * 0.015
           const markerGroup = markerGroupRef.current
           if (markerGroup) {
             for (const marker of markerGroup.children as THREE.Group[]) {
@@ -654,11 +657,11 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
               const dot = worldPosition.clone().normalize().dot(cameraDirection)
               const limbFade = Math.max(0, Math.min(1, (dot - 0.08) / 0.22))
               const hovered = Boolean(marker.userData.hovered)
-              const targetOpacity = (hovered ? 0.82 : 0.46) * limbFade
+              const targetOpacity = (hovered ? 0.38 : 0.22) * limbFade
               const material = glow.material as THREE.SpriteMaterial
               material.opacity += (targetOpacity - material.opacity) * 0.12
               const baseGlowScale = Number(marker.userData.baseGlowScale ?? 0.13)
-              glow.scale.setScalar(baseGlowScale * (hovered ? 1.8 : 1.45) * pulse)
+              glow.scale.setScalar(baseGlowScale * (hovered ? 2.15 : 1.85) * pulse)
             }
           }
 
