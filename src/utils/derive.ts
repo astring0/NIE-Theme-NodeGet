@@ -1,4 +1,10 @@
-import type { Node, Usage } from '../types'
+import type { DynamicSummary, Node, Usage } from '../types'
+import { normalizeMs } from './status'
+
+function timestampOf(row: DynamicSummary | null | undefined) {
+  const value = row?.timestamp ?? row?.time
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
 
 export function deriveUsage(node: Node): Usage {
   const d = node.dynamic
@@ -17,7 +23,7 @@ export function deriveUsage(node: Node): Usage {
     netIn: d?.receive_speed,
     netOut: d?.transmit_speed,
     uptime: d?.uptime,
-    ts: d?.timestamp,
+    ts: normalizeMs(timestampOf(d)),
   }
 }
 

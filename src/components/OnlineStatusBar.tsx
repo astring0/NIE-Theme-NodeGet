@@ -128,7 +128,21 @@ function buildTitle(slot: TimelineSlot) {
 }
 
 function formatTimeRange(start: number, end: number) {
-  const fmt = (ts: number) => new Date(ts).toLocaleTimeString('zh-CN', { hour12: false })
+  const startDate = new Date(start)
+  const endDate = new Date(end - 1)
+  const sameDay = startDate.toDateString() === endDate.toDateString()
+  if (sameDay) {
+    const fmt = (ts: number) => new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    return `${fmt(start)} - ${fmt(end)}`
+  }
+  const fmt = (ts: number) =>
+    new Date(ts).toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
   return `${fmt(start)} - ${fmt(end)}`
 }
 

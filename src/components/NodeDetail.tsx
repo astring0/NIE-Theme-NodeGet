@@ -102,6 +102,7 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
   const history = node.history || []
   const trendHistory = history.slice(-120)
   const onlineSlots = isMobile ? 40 : 80
+  const onlineIntervalMinutes = Math.ceil((7 * 24 * 60) / onlineSlots)
 
   return (
     <div
@@ -189,9 +190,9 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
           <OnlineStatusBar
             history={history}
             online={node.online}
-            intervalMinutes={3}
+            intervalMinutes={onlineIntervalMinutes}
             slots={onlineSlots}
-            title="在线状态"
+            title="近7天在线状态"
           />
         </Section>
 

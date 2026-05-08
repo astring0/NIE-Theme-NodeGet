@@ -73,7 +73,7 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
           />
         </div>
 
-        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={3} />
+        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={252} title="近7天在线状态" />
 
         <MiniTcpingPanel node={node} tcpData={tcpData} loading={tcpLoading} error={tcpError} />
 

@@ -44,7 +44,8 @@ export interface StaticData {
 
 export interface DynamicSummary {
   uuid: string
-  timestamp: number
+  timestamp?: number
+  time?: number
   cpu_usage?: number
   used_memory?: number
   total_memory?: number
