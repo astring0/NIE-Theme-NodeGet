@@ -3,7 +3,6 @@ import { Button } from './ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -59,9 +58,6 @@ export function BackgroundCustomizer({ settings, onChange, className }: Props) {
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>背景样式</DialogTitle>
-          <DialogDescription>
-            当前访客本地生效，保存在浏览器里，不影响别人看到的页面。颜色会自动适配浅色 / 深色模式。
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">

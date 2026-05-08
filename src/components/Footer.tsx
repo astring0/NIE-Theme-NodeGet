@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 
-const NODEGET_REPO = 'https://github.com/NodeSeekDev/NodeGet-StatusShow'
-const NIE_REPO = 'https://github.com/3257085208/NodeGet-StatusShow'
+const NODEGET_REPO = 'https://github.com/NodeSeekDev/NodeGet'
+const STATUSSHOW_REPO = 'https://github.com/NodeSeekDev/NodeGet-StatusShow'
+const THEME_REPO = 'https://github.com/3257085208/NodeGet-StatusShow'
 const PKG_URL = 'https://raw.githubusercontent.com/NodeSeekDev/NodeGet-StatusShow/main/package.json'
 
 export function Footer({ text }: { text?: string }) {
@@ -20,27 +21,18 @@ export function Footer({ text }: { text?: string }) {
   return (
     <footer className="border-t border-border/70 bg-background/70 backdrop-blur-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-4 text-xs text-muted-foreground">
-        <span className="shrink-0">Theme by NKX</span>
+        <a href={THEME_REPO} target="_blank" rel="noreferrer" className="shrink-0 hover:text-primary transition-colors">
+          Theme by NKX
+        </a>
         <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-          {normalizedText ? (
-            <span className="truncate">{normalizedText}</span>
-          ) : (
-            <span className="truncate">
-              Powered by{' '}
-              <a href={NODEGET_REPO} target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">
-                NodeGet
-              </a>{' '}
-              &{' '}
-              <a href={NIE_REPO} target="_blank" rel="noreferrer" className="hover:text-primary transition-colors">
-                NIE
-              </a>
-            </span>
-          )}
+          <a href={NODEGET_REPO} target="_blank" rel="noreferrer" className="truncate hover:text-primary transition-colors">
+            {normalizedText || 'Powered by NodeGet'}
+          </a>
           {!normalizedText && (
             <span className="shrink-0">
               v{__APP_VERSION__}
               {outdated && (
-                <a href={`${NODEGET_REPO}/releases`} target="_blank" rel="noreferrer" className="ml-1 text-destructive">
+                <a href={`${STATUSSHOW_REPO}/releases`} target="_blank" rel="noreferrer" className="ml-1 text-destructive">
                   (Need Update)
                 </a>
               )}
