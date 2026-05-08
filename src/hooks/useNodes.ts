@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackendPool } from '../api/pool'
-import { dynamicSummaryMulti, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
+import { dynamicSummaryAvg, dynamicSummaryMulti, dynamicSummaryQuery, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
 import { isOnline, normalizeMs } from '../utils/status'
 import { nodeKeyFrom } from '../utils/nodeKey'
 import type { DynamicSummary, HistorySample, Node, NodeMeta, SiteConfig } from '../types'
@@ -60,6 +60,8 @@ const META_KEYS = [
 // 官方默认值 2s 比较灵敏；魔改版的 10s 会让资源状态明显慢半拍。
 const DYN_INTERVAL_MS = 2000
 const HISTORY_LIMIT = 300
+const HISTORY_WINDOW_MS = 4 * 60 * 60 * 1000
+const HISTORY_POINTS = 80
 const HISTORY_CACHE_KEY = 'nodeget.history.cache.v13'
 const META_CACHE_KEY = 'nodeget.meta.cache.v2'
 
@@ -170,6 +172,31 @@ function sampleFrom(row: DynamicSummary): HistorySample {
   }
 }
 
+function isUsableHistoryRow(row: DynamicSummary | null | undefined) {
+  return Boolean(row?.timestamp && normalizeMs(row.timestamp))
+}
+
+function mergeHistory(existing: HistorySample[] | undefined, incoming: HistorySample[]) {
+  const byTime = new Map<number, HistorySample>()
+  for (const item of existing || []) byTime.set(item.t, item)
+  for (const item of incoming) byTime.set(item.t, item)
+  return [...byTime.values()].sort((a, b) => a.t - b.t).slice(-HISTORY_LIMIT)
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>) {
+  const results: R[] = []
+  let index = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (index < items.length) {
+      const current = items[index++]
+      results.push(await fn(current))
+    }
+  })
+  await Promise.all(workers)
+  return results
+}
+
+
 function readJsonMap<T>(key: string, isValid: (value: unknown) => value is T) {
   if (typeof window === 'undefined') return new Map<string, T>()
   try {
@@ -234,6 +261,42 @@ export function useNodes(config: SiteConfig | null) {
 
     const sourceUuids = new Map<string, string[]>()
     const metaCache = loadMetaCache()
+
+    const fetchServerHistory = async (entry: BackendPool['entries'][number], uuids: string[]) => {
+      if (!uuids.length) return
+      const now = Date.now()
+      const from = now - HISTORY_WINDOW_MS
+      const fields = ['cpu_usage']
+      const jobs = uuids.map(uuid => ({ entry, uuid }))
+      const rows = await mapLimit(jobs, 4, async ({ entry, uuid }) => {
+        try {
+          const avgRows = await dynamicSummaryAvg(entry.client, uuid, fields, from, now, HISTORY_POINTS)
+          const samples = (avgRows || []).filter(isUsableHistoryRow).map(sampleFrom)
+          if (samples.length) return { source: entry.name, uuid, samples }
+        } catch {
+          // SQLite / older backend may not support avg; fall back to raw summary rows.
+        }
+
+        try {
+          const rawRows = await dynamicSummaryQuery(entry.client, uuid, fields, from, now, 1800)
+          const samples = (rawRows || []).filter(isUsableHistoryRow).map(sampleFrom)
+          return { source: entry.name, uuid, samples }
+        } catch {
+          return { source: entry.name, uuid, samples: [] as HistorySample[] }
+        }
+      })
+
+      setHistory(prev => {
+        const next = new Map(prev)
+        for (const item of rows) {
+          if (!item || !item.samples.length) continue
+          const key = nodeKeyFrom(item.source, item.uuid)
+          next.set(key, mergeHistory(next.get(key), item.samples))
+        }
+        return next
+      })
+    }
+
 
     const applyMetaAndStatic = async (entry: BackendPool['entries'][number], uuids: string[]) => {
       if (!uuids.length) return
@@ -345,13 +408,22 @@ export function useNodes(config: SiteConfig | null) {
       }
       setAgents(seed)
 
-      // 先拉动态数据，让 CPU / 内存 / 硬盘尽快显示；元数据和静态信息异步补齐。
+      // 后端真实历史：用 Dynamic Summary 历史判断 Agent 是否曾与 Server 通信。
+      // 只取 timestamp 是否存在来画在线格子，不用历史 CPU / 内存 / 磁盘冒充展示。
+      const serverHistory = Promise.all(
+        pool.entries.map(entry => fetchServerHistory(entry, sourceUuids.get(entry.name) || [])),
+      )
+
+      // 先拉当前动态数据，让 CPU / 内存 / 硬盘尽快显示；元数据、静态信息和历史在线格子异步补齐。
       const metaAndStatic = Promise.all(
         pool.entries.map(entry => applyMetaAndStatic(entry, sourceUuids.get(entry.name) || [])),
       )
       await tickDynamic()
       setLoading(false)
       void metaAndStatic.catch((e: unknown) => {
+        setErrors(prev => [...prev, { source: '*', error: e }])
+      })
+      void serverHistory.catch((e: unknown) => {
         setErrors(prev => [...prev, { source: '*', error: e }])
       })
     }

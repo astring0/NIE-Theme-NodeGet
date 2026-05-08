@@ -10,6 +10,53 @@ export const staticDataMulti = (c: RpcClient, uuids: string[], fields: string[])
 export const dynamicSummaryMulti = (c: RpcClient, uuids: string[], fields: string[]) =>
   c.call<DynamicSummary[]>('agent_dynamic_summary_multi_last_query', { uuids, fields })
 
+
+export const dynamicSummaryAvg = (
+  c: RpcClient,
+  uuid: string,
+  fields: string[],
+  timestamp_from: number,
+  timestamp_to: number,
+  points: number,
+) =>
+  c.call<DynamicSummary[]>(
+    'agent_query_dynamic_summary_avg',
+    {
+      dynamic_summary_avg_query: {
+        fields,
+        uuid,
+        timestamp_from,
+        timestamp_to,
+        points,
+      },
+    },
+    18_000,
+  )
+
+export const dynamicSummaryQuery = (
+  c: RpcClient,
+  uuid: string,
+  fields: string[],
+  timestamp_from: number,
+  timestamp_to: number,
+  limit: number,
+) =>
+  c.call<DynamicSummary[]>(
+    'agent_query_dynamic_summary',
+    {
+      dynamic_summary_query: {
+        fields,
+        condition: [
+          { uuid },
+          { timestamp_from },
+          { timestamp_to },
+          { limit },
+        ],
+      },
+    },
+    18_000,
+  )
+
 export const kvGetMulti = (
   c: RpcClient,
   items: { namespace: string; key: string }[],
