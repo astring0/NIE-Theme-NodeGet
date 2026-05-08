@@ -137,6 +137,8 @@ export interface SiteConfig {
   site_name?: string
   site_logo?: string
   footer?: string
+  /** 最新动态数据刷新间隔，单位毫秒。默认 10000，最小 5000，最大 60000。 */
+  refresh_interval_ms?: number
   site_tokens: { name: string; backend_url: string; token: string }[]
 }
 

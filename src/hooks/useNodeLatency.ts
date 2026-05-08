@@ -6,10 +6,10 @@ import type { BackendPool } from '../api/pool'
 import type { LatencyType, TaskQueryResult } from '../types'
 
 const WINDOW_MS = 60 * 60 * 1000
-const REFRESH_MS = 30_000
+const REFRESH_MS = 120_000
 const QUERY_TIMEOUT_MS = 20_000
 const CACHE_LIMIT = 1200
-const QUERY_LIMIT = 240
+const QUERY_LIMIT = 120
 
 export interface LatencyQueryState {
   pingData: TaskQueryResult[]
@@ -19,6 +19,18 @@ export interface LatencyQueryState {
 }
 
 const latencyCache = new Map<string, TaskQueryResult[]>()
+const latencyInflight = new Map<string, Promise<TaskQueryResult[]>>()
+const clientIds = new WeakMap<RpcClient, number>()
+let clientSeq = 0
+
+function clientKey(client: RpcClient) {
+  let id = clientIds.get(client)
+  if (!id) {
+    id = ++clientSeq
+    clientIds.set(client, id)
+  }
+  return id
+}
 
 function cacheKey(source: string, uuid: string, type: LatencyType) {
   return `${source}::${uuid}::${type}`
@@ -55,17 +67,30 @@ export async function fetchLatencyRows(
   timeoutMs = QUERY_TIMEOUT_MS,
   windowMs = WINDOW_MS,
 ) {
-  const now = Date.now()
-  const window: [number, number] = [now - windowMs, now]
+  const key = `${clientKey(client)}::${uuid}::${type}::${windowMs}`
+  const existing = latencyInflight.get(key)
+  if (existing) return existing
 
-  // 保持和官方 StatusShow 兼容的 task_query 条件格式。
-  return clean(
-    await taskQuery(
-      client,
-      [{ uuid }, { timestamp_from_to: window }, { type }, { limit: QUERY_LIMIT }],
-      timeoutMs,
-    ),
-  )
+  const request = (async () => {
+    const now = Date.now()
+    const window: [number, number] = [now - windowMs, now]
+
+    // 保持和官方 StatusShow 兼容的 task_query 条件格式。
+    return clean(
+      await taskQuery(
+        client,
+        [{ uuid }, { timestamp_from_to: window }, { type }, { limit: QUERY_LIMIT }],
+        timeoutMs,
+      ),
+    )
+  })()
+
+  latencyInflight.set(key, request)
+  try {
+    return await request
+  } finally {
+    if (latencyInflight.get(key) === request) latencyInflight.delete(key)
+  }
 }
 
 export function useNodeLatency(

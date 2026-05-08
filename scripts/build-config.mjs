@@ -34,10 +34,15 @@ if (!tokens.length) {
   process.exit(0)
 }
 
+const refreshIntervalMs = Number(process.env.REFRESH_INTERVAL_MS)
+
 const config = {
   site_name: process.env.SITE_NAME || 'NodeGet Status',
   site_logo: process.env.SITE_LOGO || '',
   footer: process.env.SITE_FOOTER || 'Powered by NodeGet',
+  ...(Number.isFinite(refreshIntervalMs) && refreshIntervalMs > 0
+    ? { refresh_interval_ms: refreshIntervalMs }
+    : {}),
   site_tokens: tokens,
 }
 

@@ -2,7 +2,6 @@ import { ArrowDown, ArrowUp, Clock, type LucideIcon } from 'lucide-react'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
 import { Flag } from './Flag'
-import { OnlineStatusBar } from './OnlineStatusBar'
 import { MiniTcpingPanel } from './MiniTcpingPanel'
 import { ResourceRing } from './ResourceRing'
 import { StatusDot } from './StatusDot'
@@ -26,15 +25,15 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
   const cpu = cpuLabel(node)
   const { ref, visible } = useInViewport<HTMLAnchorElement>({ rootMargin: '320px 0px' })
   const { tcpData, loading: tcpLoading, error: tcpError } = useNodeTcpLatency(pool, node.source, node.uuid, {
-    enabled: visible,
-    refreshMs: 90_000,
+    enabled: visible && node.online,
+    refreshMs: 180_000,
     priority: visible ? 'high' : 'normal',
   })
   return (
     <a ref={ref} href={`#${encodeURIComponent(nodeKey(node))}`} className="block h-full">
       <Card
         className={cn(
-          'group h-full min-h-[432px] sm:min-h-[500px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 hover:border-primary/90 hover:bg-card hover:shadow-[0_0_0_1px_rgba(66,185,131,0.32),0_12px_28px_rgba(15,23,42,0.06)] flex flex-col gap-3.5 sm:gap-4',
+          'group h-full min-h-[360px] sm:min-h-[430px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 hover:border-primary/90 hover:bg-card hover:shadow-[0_0_0_1px_rgba(66,185,131,0.32),0_12px_28px_rgba(15,23,42,0.06)] flex flex-col gap-3.5 sm:gap-4',
           !node.online && 'opacity-75',
         )}
       >
@@ -72,8 +71,6 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
             strokeWidth={9}
           />
         </div>
-
-        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={252} title="近7天在线状态" />
 
         <MiniTcpingPanel node={node} tcpData={tcpData} loading={tcpLoading} error={tcpError} />
 

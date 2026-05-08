@@ -3,10 +3,10 @@ import { fetchLatencyRows, getLatencyCache, setLatencyCache } from './useNodeLat
 import type { BackendPool } from '../api/pool'
 import type { TaskQueryResult } from '../types'
 
-const DEFAULT_REFRESH_MS = 90_000
+const DEFAULT_REFRESH_MS = 180_000
 const QUERY_TIMEOUT_MS = 12_000
 const AVAILABILITY_WINDOW_MS = 4 * 60 * 60 * 1000
-const MAX_CONCURRENT = 3
+const MAX_CONCURRENT = 2
 
 type Priority = 'high' | 'normal'
 

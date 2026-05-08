@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackendPool } from '../api/pool'
 import {
-  dynamicDataAvg,
   dynamicDataMulti,
-  dynamicDataQuery,
-  dynamicSummaryAvg,
   dynamicSummaryMulti,
-  dynamicSummaryQuery,
   kvGetMulti,
   listAgentUuids,
   staticDataMulti,
@@ -54,13 +50,6 @@ const DYNAMIC_FIELDS = [
 ]
 
 const DYNAMIC_DATA_FIELDS = ['cpu', 'ram', 'load', 'system', 'disk', 'network']
-const DYNAMIC_DATA_HISTORY_FIELD_SETS = [
-  DYNAMIC_DATA_FIELDS,
-  ['cpu', 'ram', 'disk', 'network'],
-  ['cpu'],
-  [],
-]
-
 const META_KEYS = [
   'metadata_name',
   'metadata_region',
@@ -76,12 +65,11 @@ const META_KEYS = [
   'metadata_expire_time',
 ]
 
-const DYN_INTERVAL_MS = 2000
-const HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
-const HISTORY_POINTS = 80
-const HISTORY_LIMIT = 5000
-const RAW_HISTORY_LIMIT = 2000
-const RAW_HISTORY_PAGES = 12
+const DEFAULT_DYN_INTERVAL_MS = 10_000
+const MIN_DYN_INTERVAL_MS = 5_000
+const MAX_DYN_INTERVAL_MS = 60_000
+const HIDDEN_DYN_INTERVAL_MS = 60_000
+const LIVE_HISTORY_LIMIT = 180
 const META_CACHE_KEY = 'nodeget.meta.cache.v2'
 
 function emptyMeta(): NodeMeta {
@@ -242,74 +230,13 @@ function mergeHistory(existing: HistorySample[] | undefined, incoming: HistorySa
   const byTime = new Map<number, HistorySample>()
   for (const item of existing || []) byTime.set(item.t, item)
   for (const item of incoming) byTime.set(item.t, item)
-  return [...byTime.values()].sort((a, b) => a.t - b.t).slice(-HISTORY_LIMIT)
+  return [...byTime.values()].sort((a, b) => a.t - b.t).slice(-LIVE_HISTORY_LIMIT)
 }
 
-function samplesFromSummaryRows(rows: DynamicSummary[] | null | undefined) {
-  return (rows || []).filter(isUsableHistoryRow).map(sampleFrom)
-}
-
-function samplesFromDynamicRows(rows: DynamicDataResponse[] | null | undefined) {
-  return (rows || []).map(summaryFromDynamicData).filter(isUsableHistoryRow).map(sampleFrom)
-}
-
-async function pagedSummarySamples(client: BackendPool['entries'][number]['client'], uuid: string, fields: string[], from: number, to: number) {
-  const samples: HistorySample[] = []
-  let cursorTo = to
-  for (let page = 0; page < RAW_HISTORY_PAGES; page++) {
-    const rows = await dynamicSummaryQuery(client, uuid, fields, from, cursorTo, RAW_HISTORY_LIMIT)
-    const pageSamples = samplesFromSummaryRows(rows)
-    if (!pageSamples.length) break
-    samples.push(...pageSamples)
-    const minTs = Math.min(...pageSamples.map(item => item.t))
-    if (minTs <= from || pageSamples.length < RAW_HISTORY_LIMIT) break
-    cursorTo = minTs - 1
-  }
-  return samples
-}
-
-async function pagedDynamicSamples(client: BackendPool['entries'][number]['client'], uuid: string, fields: string[], from: number, to: number) {
-  const samples: HistorySample[] = []
-  let cursorTo = to
-  for (let page = 0; page < RAW_HISTORY_PAGES; page++) {
-    const rows = await dynamicDataQuery(client, uuid, fields, from, cursorTo, RAW_HISTORY_LIMIT)
-    const pageSamples = samplesFromDynamicRows(rows)
-    if (!pageSamples.length) break
-    samples.push(...pageSamples)
-    const minTs = Math.min(...pageSamples.map(item => item.t))
-    if (minTs <= from || pageSamples.length < RAW_HISTORY_LIMIT) break
-    cursorTo = minTs - 1
-  }
-  return samples
-}
-
-async function loadRealHistorySamples(client: BackendPool['entries'][number]['client'], uuid: string, from: number, to: number) {
-  try {
-    const avgRows = await dynamicSummaryAvg(client, uuid, DYNAMIC_FIELDS, from, to, HISTORY_POINTS)
-    const samples = samplesFromSummaryRows(avgRows)
-    if (samples.length) return samples
-  } catch {}
-
-  for (const fields of [DYNAMIC_FIELDS, []]) {
-    try {
-      const samples = await pagedSummarySamples(client, uuid, fields, from, to)
-      if (samples.length) return samples
-    } catch {}
-  }
-
-  for (const fields of DYNAMIC_DATA_HISTORY_FIELD_SETS) {
-    try {
-      const avgRows = await dynamicDataAvg(client, uuid, fields, from, to, HISTORY_POINTS)
-      const samples = samplesFromDynamicRows(avgRows)
-      if (samples.length) return samples
-    } catch {}
-    try {
-      const samples = await pagedDynamicSamples(client, uuid, fields, from, to)
-      if (samples.length) return samples
-    } catch {}
-  }
-
-  return []
+function normalizeRefreshInterval(value: unknown) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_DYN_INTERVAL_MS
+  return Math.min(MAX_DYN_INTERVAL_MS, Math.max(MIN_DYN_INTERVAL_MS, n))
 }
 
 function historyUpdatesFromDynamicRows(updates: DynamicUpdate[]) {
@@ -321,19 +248,6 @@ function historyUpdatesFromDynamicRows(updates: DynamicUpdate[]) {
     grouped.set(key, [...(grouped.get(key) || []), sample])
   }
   return grouped
-}
-
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>) {
-  const results: R[] = []
-  let index = 0
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (index < items.length) {
-      const current = items[index++]
-      results.push(await fn(current))
-    }
-  })
-  await Promise.all(workers)
-  return results
 }
 
 function readJsonMap<T>(key: string, isValid: (value: unknown) => value is T) {
@@ -393,26 +307,10 @@ export function useNodes(config: SiteConfig | null) {
 
     const sourceUuids = new Map<string, string[]>()
     const metaCache = loadMetaCache()
-
-    const fetchServerHistory = async (entry: BackendPool['entries'][number], uuids: string[]) => {
-      if (!uuids.length) return
-      const now = Date.now()
-      const from = now - HISTORY_WINDOW_MS
-      const jobs = uuids.map(uuid => ({ entry, uuid }))
-      const rows = await mapLimit(jobs, 3, async ({ entry, uuid }) => {
-        const samples = await loadRealHistorySamples(entry.client, uuid, from, now)
-        return { source: entry.name, uuid, samples }
-      })
-      setHistory(prev => {
-        const next = new Map(prev)
-        for (const item of rows) {
-          if (!item || !item.samples.length) continue
-          const key = nodeKeyFrom(item.source, item.uuid)
-          next.set(key, mergeHistory(next.get(key), item.samples))
-        }
-        return next
-      })
-    }
+    const dynamicIntervalMs = normalizeRefreshInterval(config.refresh_interval_ms)
+    let dynamicInFlight = false
+    let stopped = false
+    let dynTimer: number | null = null
 
     const applyMetaAndStatic = async (entry: BackendPool['entries'][number], uuids: string[]) => {
       if (!uuids.length) return
@@ -463,49 +361,72 @@ export function useNodes(config: SiteConfig | null) {
     }
 
     const tickDynamic = async () => {
+      if (stopped || dynamicInFlight) return
+      dynamicInFlight = true
       const updates: DynamicUpdate[] = []
-      await Promise.allSettled(pool.entries.map(async entry => {
-        const uuids = sourceUuids.get(entry.name) || []
-        if (!uuids.length) return
-        const seen = new Set<string>()
-        try {
-          const rows = await dynamicSummaryMulti(entry.client, uuids, DYNAMIC_FIELDS)
-          for (const row of rows || []) {
-            if (!row?.uuid) continue
-            updates.push({ source: entry.name, row })
-            seen.add(row.uuid)
-          }
-        } catch {}
-        const missing = uuids.filter(uuid => !seen.has(uuid))
-        if (!missing.length) return
-        try {
-          const rows = await dynamicDataMulti(entry.client, missing, DYNAMIC_DATA_FIELDS)
-          for (const row of rows || []) {
-            const summary = summaryFromDynamicData(row)
-            if (summary) updates.push({ source: entry.name, row: summary })
-          }
-        } catch {}
-      }))
-      if (!updates.length) return
-      setLive(prev => {
-        const next = new Map(prev)
-        for (const { source, row } of updates) {
-          const key = nodeKeyFrom(source, row.uuid)
-          const cur = next.get(key)
-          const rowTs = timestampMs(row) ?? 0
-          const curTs = timestampMs(cur) ?? 0
-          if (!cur || rowTs >= curTs) next.set(key, row)
-        }
-        return next
-      })
-      const grouped = historyUpdatesFromDynamicRows(updates)
-      if (grouped.size) {
-        setHistory(prev => {
+      try {
+        await Promise.allSettled(pool.entries.map(async entry => {
+          const uuids = sourceUuids.get(entry.name) || []
+          if (!uuids.length) return
+          const seen = new Set<string>()
+          try {
+            const rows = await dynamicSummaryMulti(entry.client, uuids, DYNAMIC_FIELDS)
+            for (const row of rows || []) {
+              if (!row?.uuid) continue
+              updates.push({ source: entry.name, row })
+              seen.add(row.uuid)
+            }
+          } catch {}
+          const missing = uuids.filter(uuid => !seen.has(uuid))
+          if (!missing.length) return
+          try {
+            const rows = await dynamicDataMulti(entry.client, missing, DYNAMIC_DATA_FIELDS)
+            for (const row of rows || []) {
+              const summary = summaryFromDynamicData(row)
+              if (summary) updates.push({ source: entry.name, row: summary })
+            }
+          } catch {}
+        }))
+        if (!updates.length || stopped) return
+        setLive(prev => {
           const next = new Map(prev)
-          for (const [key, samples] of grouped) next.set(key, mergeHistory(next.get(key), samples))
+          for (const { source, row } of updates) {
+            const key = nodeKeyFrom(source, row.uuid)
+            const cur = next.get(key)
+            const rowTs = timestampMs(row) ?? 0
+            const curTs = timestampMs(cur) ?? 0
+            if (!cur || rowTs >= curTs) next.set(key, row)
+          }
           return next
         })
+        const grouped = historyUpdatesFromDynamicRows(updates)
+        if (grouped.size) {
+          setHistory(prev => {
+            const next = new Map(prev)
+            for (const [key, samples] of grouped) next.set(key, mergeHistory(next.get(key), samples))
+            return next
+          })
+        }
+      } finally {
+        dynamicInFlight = false
       }
+    }
+
+    const clearDynamicTimer = () => {
+      if (!dynTimer) return
+      window.clearTimeout(dynTimer)
+      dynTimer = null
+    }
+
+    const scheduleDynamicTick = () => {
+      if (stopped) return
+      clearDynamicTimer()
+      const delay = document.visibilityState === 'hidden' ? HIDDEN_DYN_INTERVAL_MS : dynamicIntervalMs
+      dynTimer = window.setTimeout(async () => {
+        dynTimer = null
+        await tickDynamic()
+        scheduleDynamicTick()
+      }, delay)
     }
 
     const bootstrap = async () => {
@@ -518,12 +439,11 @@ export function useNodes(config: SiteConfig | null) {
         for (const uuid of uuids) seed.set(nodeKeyFrom(source, uuid), blankAgent(uuid, source, metaCache.get(nodeKeyFrom(source, uuid))))
       }
       setAgents(seed)
-      const serverHistory = Promise.all(pool.entries.map(entry => fetchServerHistory(entry, sourceUuids.get(entry.name) || [])))
       const metaAndStatic = Promise.all(pool.entries.map(entry => applyMetaAndStatic(entry, sourceUuids.get(entry.name) || [])))
       await tickDynamic()
       setLoading(false)
+      scheduleDynamicTick()
       void metaAndStatic.catch((e: unknown) => setErrors(prev => [...prev, { source: '*', error: e }]))
-      void serverHistory.catch((e: unknown) => setErrors(prev => [...prev, { source: '*', error: e }]))
     }
 
     bootstrap().catch((e: unknown) => {
@@ -531,13 +451,20 @@ export function useNodes(config: SiteConfig | null) {
       setLoading(false)
     })
 
-    const onVisible = () => { if (document.visibilityState === 'visible') tickDynamic() }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        clearDynamicTimer()
+        void tickDynamic().finally(scheduleDynamicTick)
+      } else {
+        scheduleDynamicTick()
+      }
+    }
     document.addEventListener('visibilitychange', onVisible)
-    const dynTimer = setInterval(tickDynamic, DYN_INTERVAL_MS)
-    const clockTimer = setInterval(() => setTick(t => t + 1), 5000)
+    const clockTimer = window.setInterval(() => setTick(t => t + 1), 5000)
     return () => {
-      clearInterval(dynTimer)
-      clearInterval(clockTimer)
+      stopped = true
+      clearDynamicTimer()
+      window.clearInterval(clockTimer)
       document.removeEventListener('visibilitychange', onVisible)
       setPool(null)
       pool.close()

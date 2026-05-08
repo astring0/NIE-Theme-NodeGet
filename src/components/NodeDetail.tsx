@@ -13,7 +13,6 @@ import {
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
-import { OnlineStatusBar } from './OnlineStatusBar'
 import { ResourceRing } from './ResourceRing'
 import { Flag } from './Flag'
 import { StatusDot } from './StatusDot'
@@ -101,9 +100,6 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
       : null
   const history = node.history || []
   const trendHistory = history.slice(-120)
-  const onlineSlots = isMobile ? 40 : 80
-  const onlineIntervalMinutes = Math.ceil((7 * 24 * 60) / onlineSlots)
-
   return (
     <div
       ref={scrollRef}
@@ -186,18 +182,8 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
           </div>
         </Section>
 
-        <Section title="在线状态">
-          <OnlineStatusBar
-            history={history}
-            online={node.online}
-            intervalMinutes={onlineIntervalMinutes}
-            slots={onlineSlots}
-            title="近7天在线状态"
-          />
-        </Section>
-
         {trendHistory.length > 1 && (
-          <Section title="近 240 秒趋势">
+          <Section title="最近实时趋势">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <Spark
                 data={trendHistory}

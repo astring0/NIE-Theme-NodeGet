@@ -26,11 +26,14 @@ Fork本仓库 修改public/config.json 然后再cloudflare pages / vercel 直接
 SITE_NAME=狼牙的探针
 SITE_LOGO=https://example.com/logo.png
 SITE_FOOTER=Powered by NodeGet
+REFRESH_INTERVAL_MS=10000
 SITE_1=name="master-1",backend_url="wss://m1.example.com",token="abc123"
 SITE_2=name="master-2",backend_url="wss://m2.example.com",token="xyz789" 
 ```
 
 前三个对应 `site_name` / `site_logo` / `footer` 不写就用默认值
+
+`REFRESH_INTERVAL_MS` 是前端拉取最新动态数据的间隔，单位毫秒，默认 `10000`，最小 `5000`，最大 `60000`。访问量大的站建议保持 10000 或更高。
 
 `SITE_n` 是主控 值用 `key="value"` 拿逗号串起来 支持 `name` / `backend_url` / `token` 三个字段 值里要塞引号或反斜杠的话用 `\"` 和 `\\` 转义
 
