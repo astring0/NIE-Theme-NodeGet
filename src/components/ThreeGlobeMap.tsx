@@ -720,17 +720,16 @@ export function Globe3DMap({ groups, total, onOpen }: Props) {
   return (
     <div
       className={cn(
-        'relative w-full overflow-hidden rounded-[1.4rem] border border-border/70 bg-[linear-gradient(180deg,rgba(244,247,250,0.98),rgba(231,237,243,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.78),inset_0_0_0_1px_rgba(148,163,184,0.12),0_16px_36px_rgba(15,23,42,0.07)]',
-        'dark:bg-[linear-gradient(180deg,rgba(7,17,29,0.96),rgba(2,8,20,0.98))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),inset_0_0_0_1px_rgba(34,211,238,0.04),0_22px_60px_rgba(2,8,23,0.4)]',
+        'relative w-full overflow-hidden rounded-[1.4rem] border border-border/70 themed-panel',
       )}
       style={{ aspectRatio: '900 / 460' }}
       onMouseLeave={() => { clearHideTimer(); setHover(null) }}
     >
-      <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(100,116,139,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(100,116,139,0.045)_1px,transparent_1px)] [background-size:40px_40px] [mask-image:radial-gradient(circle_at_50%_50%,rgba(0,0,0,0.88),transparent_100%)] dark:opacity-45 dark:[background-image:linear-gradient(rgba(103,232,249,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(103,232,249,0.05)_1px,transparent_1px)]" />
-      <div className="pointer-events-none absolute left-[0.9rem] top-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-tl-[0.6rem] border-l-2 border-t-2 border-sky-200/80 dark:border-cyan-300/35" />
-      <div className="pointer-events-none absolute right-[0.9rem] top-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-tr-[0.6rem] border-r-2 border-t-2 border-sky-200/80 dark:border-cyan-300/35" />
-      <div className="pointer-events-none absolute bottom-[0.9rem] left-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-bl-[0.6rem] border-b-2 border-l-2 border-sky-200/80 dark:border-cyan-300/35" />
-      <div className="pointer-events-none absolute bottom-[0.9rem] right-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-br-[0.6rem] border-b-2 border-r-2 border-sky-200/80 dark:border-cyan-300/35" />
+      <div className="pointer-events-none absolute inset-0 opacity-35 themed-panel-grid dark:opacity-45" />
+      <div className="pointer-events-none absolute left-[0.9rem] top-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-tl-[0.6rem] border-l-2 border-t-2 themed-corner" />
+      <div className="pointer-events-none absolute right-[0.9rem] top-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-tr-[0.6rem] border-r-2 border-t-2 themed-corner" />
+      <div className="pointer-events-none absolute bottom-[0.9rem] left-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-bl-[0.6rem] border-b-2 border-l-2 themed-corner" />
+      <div className="pointer-events-none absolute bottom-[0.9rem] right-[0.9rem] z-[1] h-[2.8rem] w-[2.8rem] rounded-br-[0.6rem] border-b-2 border-r-2 themed-corner" />
 
       <div ref={rootRef} className="relative z-[2] h-full w-full" />
 

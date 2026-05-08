@@ -60,7 +60,7 @@ export function BackgroundCustomizer({ settings, onChange, className }: Props) {
         <DialogHeader>
           <DialogTitle>背景样式</DialogTitle>
           <DialogDescription>
-            当前访客本地生效，保存在浏览器里，不影响别人看到的页面。颜色会自动适配浅色 / 深色模式。
+            当前访客本地生效，保存在浏览器里。背景、卡片线条、圆环底圈等细节会一起轻微跟随，浅色 / 深色模式都会自动适配。
           </DialogDescription>
         </DialogHeader>
 
