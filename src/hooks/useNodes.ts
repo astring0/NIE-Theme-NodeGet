@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackendPool } from '../api/pool'
-import { dynamicDataAvg, dynamicDataQuery, dynamicSummaryMulti, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
+import { dynamicDataMulti, dynamicDataQuery, dynamicSummaryAvg, dynamicSummaryMulti, dynamicSummaryQuery, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
 import { isOnline, normalizeMs } from '../utils/status'
 import { nodeKeyFrom } from '../utils/nodeKey'
-import type { DynamicSummary, HistorySample, Node, NodeMeta, SiteConfig } from '../types'
+import type { DynamicDataResponse, DynamicSummary, HistorySample, Node, NodeMeta, SiteConfig } from '../types'
 
 type Agent = Pick<Node, 'uuid' | 'source' | 'meta' | 'static'>
 
@@ -42,7 +42,58 @@ const DYNAMIC_FIELDS = [
   'tcp_connections',
   'udp_connections',
 ]
-const HISTORY_FIELDS = ['cpu', 'ram', 'disk', 'network']
+
+const DYNAMIC_DATA_FIELDS = ['cpu', 'ram', 'load', 'system', 'disk', 'network']
+
+function finiteNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function sumFinite<T>(items: T[] | undefined, getter: (item: T) => unknown) {
+  if (!Array.isArray(items)) return undefined
+  let total = 0
+  let seen = false
+  for (const item of items) {
+    const value = finiteNumber(getter(item))
+    if (value == null) continue
+    total += value
+    seen = true
+  }
+  return seen ? total : undefined
+}
+
+function summaryFromDynamicData(row: DynamicDataResponse): DynamicSummary | null {
+  const timestamp = finiteNumber(row.timestamp) ?? finiteNumber(row.time)
+  if (!row.uuid || !timestamp) return null
+  const disk = row.disk || []
+  const interfaces = row.network?.interfaces || []
+  return {
+    uuid: row.uuid,
+    timestamp,
+    cpu_usage: finiteNumber(row.cpu?.total_cpu_usage),
+    used_memory: finiteNumber(row.ram?.used_memory),
+    total_memory: finiteNumber(row.ram?.total_memory),
+    available_memory: finiteNumber(row.ram?.available_memory),
+    used_swap: finiteNumber(row.ram?.used_swap),
+    total_swap: finiteNumber(row.ram?.total_swap),
+    total_space: sumFinite(disk, item => item.total_space),
+    available_space: sumFinite(disk, item => item.available_space),
+    read_speed: sumFinite(disk, item => item.read_speed),
+    write_speed: sumFinite(disk, item => item.write_speed),
+    receive_speed: sumFinite(interfaces, item => item.receive_speed),
+    transmit_speed: sumFinite(interfaces, item => item.transmit_speed),
+    total_received: sumFinite(interfaces, item => item.total_received),
+    total_transmitted: sumFinite(interfaces, item => item.total_transmitted),
+    load_one: finiteNumber(row.load?.one),
+    load_five: finiteNumber(row.load?.five),
+    load_fifteen: finiteNumber(row.load?.fifteen),
+    uptime: finiteNumber(row.system?.uptime),
+    boot_time: finiteNumber(row.system?.boot_time),
+    process_count: finiteNumber(row.system?.process_count),
+    tcp_connections: finiteNumber(row.network?.tcp_connections),
+    udp_connections: finiteNumber(row.network?.udp_connections),
+  }
+}
 const META_KEYS = [
   'metadata_name',
   'metadata_region',
@@ -172,67 +223,8 @@ function sampleFrom(row: DynamicSummary): HistorySample {
   }
 }
 
-
-function numberValue(value: unknown) {
-  const n = Number(value)
-  return Number.isFinite(n) ? n : null
-}
-
-function pickNumber(obj: Record<string, unknown> | null | undefined, keys: string[]) {
-  if (!obj) return null
-  for (const key of keys) {
-    const value = numberValue(obj[key])
-    if (value != null) return value
-  }
-  return null
-}
-
-function objectValue(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
-}
-
-function sampleFromHistoryRow(row: Record<string, unknown>): HistorySample | null {
-  const t = normalizeMs(Number(row.timestamp))
-  if (!t) return null
-
-  const cpu = objectValue(row.cpu)
-  const ram = objectValue(row.ram)
-  const disk = objectValue(row.disk)
-  const network = objectValue(row.network)
-
-  const totalMemory = pickNumber(ram, ['total_memory'])
-  const usedMemory = pickNumber(ram, ['used_memory'])
-  const availableMemory = pickNumber(ram, ['available_memory'])
-  const totalDisk = pickNumber(disk, ['total_space', 'total_disk', 'total'])
-  const availableDisk = pickNumber(disk, ['available_space', 'available_disk', 'available'])
-  const usedDisk = pickNumber(disk, ['used_space', 'used_disk', 'used'])
-
-  return {
-    t,
-    cpu: pickNumber(cpu, ['total_cpu_usage', 'cpu_usage']),
-    mem: totalMemory
-      ? usedMemory != null
-        ? (usedMemory / totalMemory) * 100
-        : availableMemory != null
-          ? ((totalMemory - availableMemory) / totalMemory) * 100
-          : null
-      : null,
-    disk: totalDisk
-      ? usedDisk != null
-        ? (usedDisk / totalDisk) * 100
-        : availableDisk != null
-          ? ((totalDisk - availableDisk) / totalDisk) * 100
-          : null
-      : null,
-    netIn: pickNumber(network, ['receive_speed', 'rx_speed', 'download_speed']) ?? 0,
-    netOut: pickNumber(network, ['transmit_speed', 'tx_speed', 'upload_speed']) ?? 0,
-  }
-}
-
-function isUsableHistoryRow(row: Record<string, unknown> | null | undefined) {
-  return Boolean(row?.timestamp && normalizeMs(Number(row.timestamp)))
+function isUsableHistoryRow(row: DynamicSummary | null | undefined) {
+  return Boolean(row?.timestamp && normalizeMs(row.timestamp))
 }
 
 function mergeHistory(existing: HistorySample[] | undefined, incoming: HistorySample[]) {
@@ -240,6 +232,17 @@ function mergeHistory(existing: HistorySample[] | undefined, incoming: HistorySa
   for (const item of existing || []) byTime.set(item.t, item)
   for (const item of incoming) byTime.set(item.t, item)
   return [...byTime.values()].sort((a, b) => a.t - b.t).slice(-HISTORY_LIMIT)
+}
+
+function historyUpdatesFromDynamicRows(updates: DynamicUpdate[]) {
+  const grouped = new Map<string, HistorySample[]>()
+  for (const { source, row } of updates) {
+    if (!isUsableHistoryRow(row)) continue
+    const key = nodeKeyFrom(source, row.uuid)
+    const sample = sampleFrom(row)
+    grouped.set(key, [...(grouped.get(key) || []), sample])
+  }
+  return grouped
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>) {
@@ -315,20 +318,29 @@ export function useNodes(config: SiteConfig | null) {
       if (!uuids.length) return
       const now = Date.now()
       const from = now - HISTORY_WINDOW_MS
-      const fields = HISTORY_FIELDS
+      const fields = DYNAMIC_FIELDS
       const jobs = uuids.map(uuid => ({ entry, uuid }))
       const rows = await mapLimit(jobs, 4, async ({ entry, uuid }) => {
         try {
-          const avgRows = await dynamicDataAvg(entry.client, uuid, fields, from, now, HISTORY_POINTS)
-          const samples = (avgRows || []).filter(isUsableHistoryRow).map(sampleFromHistoryRow).filter((s): s is HistorySample => Boolean(s))
+          const avgRows = await dynamicSummaryAvg(entry.client, uuid, fields, from, now, HISTORY_POINTS)
+          const samples = (avgRows || []).filter(isUsableHistoryRow).map(sampleFrom)
           if (samples.length) return { source: entry.name, uuid, samples }
         } catch {
           // SQLite / older backend may not support avg; fall back to raw summary rows.
         }
 
         try {
-          const rawRows = await dynamicDataQuery(entry.client, uuid, fields, from, now, 1800)
-          const samples = (rawRows || []).filter(isUsableHistoryRow).map(sampleFromHistoryRow).filter((s): s is HistorySample => Boolean(s))
+          const rawRows = await dynamicSummaryQuery(entry.client, uuid, fields, from, now, 1800)
+          const samples = (rawRows || []).filter(isUsableHistoryRow).map(sampleFrom)
+          if (samples.length) return { source: entry.name, uuid, samples }
+        } catch {}
+
+        try {
+          const rawRows = await dynamicDataQuery(entry.client, uuid, DYNAMIC_DATA_FIELDS, from, now, 1800)
+          const samples = (rawRows || [])
+            .map(summaryFromDynamicData)
+            .filter(isUsableHistoryRow)
+            .map(sampleFrom)
           return { source: entry.name, uuid, samples }
         } catch {
           return { source: entry.name, uuid, samples: [] as HistorySample[] }
@@ -410,9 +422,27 @@ export function useNodes(config: SiteConfig | null) {
         pool.entries.map(async entry => {
           const uuids = sourceUuids.get(entry.name) || []
           if (!uuids.length) return
+
+          const seen = new Set<string>()
           try {
             const rows = await dynamicSummaryMulti(entry.client, uuids, DYNAMIC_FIELDS)
-            for (const row of rows || []) updates.push({ source: entry.name, row })
+            for (const row of rows || []) {
+              if (!row?.uuid) continue
+              updates.push({ source: entry.name, row })
+              seen.add(row.uuid)
+            }
+          } catch {}
+
+          // 有些 NodeGet 部署只存/上报完整 DynamicMonitoringData，没有 DynamicMonitoringSummaryData。
+          // 这里回退到官方 dynamic latest 接口，并只用接口返回的 timestamp 判断在线。
+          const missing = uuids.filter(uuid => !seen.has(uuid))
+          if (!missing.length) return
+          try {
+            const rows = await dynamicDataMulti(entry.client, missing, DYNAMIC_DATA_FIELDS)
+            for (const row of rows || []) {
+              const summary = summaryFromDynamicData(row)
+              if (summary) updates.push({ source: entry.name, row: summary })
+            }
           } catch {}
         }),
       )
@@ -429,6 +459,19 @@ export function useNodes(config: SiteConfig | null) {
         }
         return next
       })
+
+      // 在线状态条也跟随最新 Server 返回值刷新。
+      // 不写浏览器缓存、不补假点：每个格子都来自 API 返回的真实 timestamp。
+      const grouped = historyUpdatesFromDynamicRows(updates)
+      if (grouped.size) {
+        setHistory(prev => {
+          const next = new Map(prev)
+          for (const [key, samples] of grouped) {
+            next.set(key, mergeHistory(next.get(key), samples))
+          }
+          return next
+        })
+      }
     }
 
     const bootstrap = async () => {
@@ -446,8 +489,8 @@ export function useNodes(config: SiteConfig | null) {
       }
       setAgents(seed)
 
-      // 后端真实历史：只从 Server Dynamic Summary 历史生成在线格子。
-      // 不读取/写入浏览器本地历史，也不把当前浏览器观察到的数据混入在线格子。
+      // 后端真实历史：优先读取 Server Dynamic Summary；没有摘要数据时回退到完整 DynamicMonitoringData。
+      // 不读取/写入浏览器本地在线历史。
       const serverHistory = Promise.all(
         pool.entries.map(entry => fetchServerHistory(entry, sourceUuids.get(entry.name) || [])),
       )

@@ -69,6 +69,50 @@ export interface DynamicSummary {
   udp_connections?: number
 }
 
+
+export interface DynamicDataResponse {
+  uuid: string
+  timestamp?: number
+  time?: number
+  cpu?: {
+    total_cpu_usage?: number
+    per_core?: { id: number; cpu_usage?: number; frequency_mhz?: number }[]
+  }
+  ram?: {
+    total_memory?: number
+    available_memory?: number
+    used_memory?: number
+    total_swap?: number
+    used_swap?: number
+  }
+  load?: {
+    one?: number
+    five?: number
+    fifteen?: number
+  }
+  system?: {
+    boot_time?: number
+    uptime?: number
+    process_count?: number
+  }
+  disk?: {
+    total_space?: number
+    available_space?: number
+    read_speed?: number
+    write_speed?: number
+  }[]
+  network?: {
+    interfaces?: {
+      total_received?: number
+      total_transmitted?: number
+      receive_speed?: number
+      transmit_speed?: number
+    }[]
+    tcp_connections?: number
+    udp_connections?: number
+  }
+}
+
 export interface HistorySample {
   t: number
   cpu: number | null

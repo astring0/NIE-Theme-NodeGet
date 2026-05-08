@@ -161,7 +161,6 @@ export function buildAgentTimeline(
 ): TimelineSlot[] {
   const intervalMs = intervalMinutes * 60 * 1000
   const sorted = [...agentHistory].sort((a, b) => a.t - b.t)
-  const latest = sorted.at(-1) ?? null
   const windowEnd = Math.ceil(now / intervalMs) * intervalMs
   const windowStart = windowEnd - slots * intervalMs
 
@@ -169,14 +168,12 @@ export function buildAgentTimeline(
     const start = windowStart + index * intervalMs
     const end = start + intervalMs
     const sample = lastSampleInWindow(sorted, start, end)
-    const isLatestSlot = index === slots - 1
-    const useLatestCurrent = !sample && isLatestSlot && online && latest && now - latest.t <= intervalMs * 2
-    const active = Boolean(sample || useLatestCurrent)
+    const active = Boolean(sample)
     return {
       active,
       start,
       end,
-      sample: sample || (useLatestCurrent ? latest : null),
+      sample,
       reason: active ? 'agent' : 'empty',
     }
   })
