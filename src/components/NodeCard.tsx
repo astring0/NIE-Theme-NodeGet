@@ -33,7 +33,7 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
     <a ref={ref} href={`#${encodeURIComponent(nodeKey(node))}`} className="block h-full">
       <Card
         className={cn(
-          'group h-full min-h-[360px] sm:min-h-[430px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 hover:border-primary/90 hover:bg-card hover:shadow-[0_0_0_1px_rgba(66,185,131,0.32),0_12px_28px_rgba(15,23,42,0.06)] flex flex-col gap-3.5 sm:gap-4',
+          'group node-card-hover h-full min-h-[360px] sm:min-h-[430px] p-4 sm:p-5 transition-[border-color,box-shadow,opacity,background-color] duration-200 hover:border-primary/90 hover:bg-card flex flex-col gap-3.5 sm:gap-4',
           !node.online && 'opacity-75',
         )}
       >

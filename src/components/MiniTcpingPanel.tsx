@@ -30,7 +30,7 @@ export function MiniTcpingPanel({ node, tcpData, loading = false, error = null, 
   const series = useMemo(() => summarizeTcping(tcpData), [tcpData])
 
   return (
-    <div className="rounded-lg border border-dashed border-border bg-secondary/28 px-3 py-3 sm:px-4 sm:py-3.5 mt-1">
+    <div className="rounded-lg border border-dashed border-border/95 bg-secondary/55 px-3 py-3 sm:px-4 sm:py-3.5 mt-1">
       <div className="mb-2.5 sm:mb-3 flex items-center gap-1.5 text-xs font-black text-muted-foreground">
         <Activity className="h-3.5 w-3.5 text-primary" />
         <span>三网 TCPing</span>
@@ -44,7 +44,7 @@ export function MiniTcpingPanel({ node, tcpData, loading = false, error = null, 
           ))}
         </div>
       ) : (
-        <div className="flex min-h-[92px] items-center justify-center rounded-md border border-dashed border-border/80 px-4 text-center text-[11px] font-bold text-muted-foreground leading-5">
+        <div className="flex min-h-[92px] items-center justify-center rounded-md border border-dashed border-border px-4 text-center text-[11px] font-bold text-muted-foreground leading-5">
           {loading ? '读取 TCPing…' : error ? simplifyError(error) : compact ? '打开详情查看 TCPing' : '暂无 TCPing 数据'}
         </div>
       )}
@@ -56,7 +56,7 @@ function TcpingRow({ item }: { item: SeriesSummary }) {
   return (
     <div className="grid grid-cols-[38px_minmax(0,1fr)_52px] sm:grid-cols-[44px_minmax(0,1fr)_58px] items-center gap-2 sm:gap-3 text-[11px]">
       <div className="truncate font-black text-muted-foreground" title={item.name}>{item.label}</div>
-      <div className="flex h-5 items-stretch gap-[2px] overflow-hidden rounded-md bg-border/55 px-1 py-1">
+      <div className="flex h-5 items-stretch gap-[2px] overflow-hidden rounded-md bg-border/70 px-1 py-1">
         {item.values.map((v, i) => (
           <span
             key={i}

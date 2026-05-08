@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS: BackgroundSettings = {
   baseColor: '#f5f8fb',
   accentColor: '#b7c4d6',
   density: 22,
-  opacity: 0.09,
+  opacity: 0.1,
 }
 
 const PALETTES = [
