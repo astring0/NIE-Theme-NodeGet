@@ -6,7 +6,7 @@ interface Props {
 }
 
 const PALETTE_LINKS = [
-  { light: ['#f5f8fb', '#b7c4d6'], dark: ['#111827', '#94a3b8'] },
+  { light: ['#f5f8fb', '#7db4d8'], dark: ['#111827', '#94a3b8'] },
   { light: ['#f2fbf6', '#34d399'], dark: ['#102019', '#4ade80'] },
   { light: ['#f2f7ff', '#60a5fa'], dark: ['#0f172a', '#38bdf8'] },
   { light: ['#f7f3ff', '#a78bfa'], dark: ['#1f1832', '#a78bfa'] },
@@ -41,7 +41,7 @@ function mixRgb(a: ReturnType<typeof parseHex>, b: ReturnType<typeof parseHex>, 
   }
 }
 
-function rgbToHsl({ r, g, b }: ReturnType<typeof parseHex>) {
+function rgbToHslParts({ r, g, b }: ReturnType<typeof parseHex>) {
   const rn = r / 255
   const gn = g / 255
   const bn = b / 255
@@ -60,7 +60,29 @@ function rgbToHsl({ r, g, b }: ReturnType<typeof parseHex>) {
     h /= 6
   }
 
-  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`
+  return {
+    h: Math.round(h * 360),
+    s: Math.round(s * 100),
+    l: Math.round(l * 100),
+  }
+}
+
+function hslString({ h, s, l }: ReturnType<typeof rgbToHslParts>) {
+  return `${h} ${s}% ${l}%`
+}
+
+function rgbToHsl(rgb: ReturnType<typeof parseHex>) {
+  return hslString(rgbToHslParts(rgb))
+}
+
+function contrastTone(accentRgb: ReturnType<typeof parseHex>, dark: boolean) {
+  const { h } = rgbToHslParts(accentRgb)
+  let hue = 36
+  if (h >= 18 && h <= 72) hue = 205
+  else if (h >= 95 && h <= 170) hue = 32
+  else if (h >= 171 && h <= 260) hue = 34
+  else if (h >= 261 && h <= 330) hue = 158
+  return `${hue} ${dark ? '78% 64%' : '84% 55%'}`
 }
 
 function luminance({ r, g, b }: ReturnType<typeof parseHex>) {
@@ -77,18 +99,21 @@ function themeVars(base: string, accent: string, dark: boolean) {
   const white = { r: 255, g: 255, b: 255 }
   const black = { r: 0, g: 0, b: 0 }
 
-  const card = dark ? mixRgb(baseRgb, white, 0.07) : mixRgb(baseRgb, white, 0.78)
-  const secondary = dark ? mixRgb(baseRgb, accentRgb, 0.13) : mixRgb(baseRgb, accentRgb, 0.075)
-  const muted = dark ? mixRgb(baseRgb, accentRgb, 0.1) : mixRgb(baseRgb, accentRgb, 0.052)
-  const border = dark ? mixRgb(baseRgb, accentRgb, 0.34) : mixRgb(baseRgb, accentRgb, 0.28)
-  const input = dark ? mixRgb(baseRgb, accentRgb, 0.41) : mixRgb(baseRgb, accentRgb, 0.34)
-  const lineSoft = dark ? mixRgb(baseRgb, accentRgb, 0.25) : mixRgb(baseRgb, accentRgb, 0.2)
-  const foreground = dark ? mixRgb(white, baseRgb, 0.08) : { r: 71, g: 85, b: 105 }
-  const mutedForeground = dark ? mixRgb(white, baseRgb, 0.34) : { r: 139, g: 151, b: 170 }
+  const neutralBorder = dark ? { r: 64, g: 76, b: 96 } : { r: 203, g: 213, b: 225 }
+  const neutralLine = dark ? { r: 49, g: 59, b: 76 } : { r: 226, g: 232, b: 240 }
+  const card = dark ? mixRgb(baseRgb, white, 0.095) : mixRgb(baseRgb, white, 0.92)
+  const secondary = dark ? mixRgb(baseRgb, accentRgb, 0.11) : mixRgb(mixRgb(baseRgb, white, 0.78), accentRgb, 0.035)
+  const muted = dark ? mixRgb(baseRgb, accentRgb, 0.08) : mixRgb(mixRgb(baseRgb, white, 0.86), accentRgb, 0.025)
+  const border = dark ? mixRgb(neutralBorder, accentRgb, 0.2) : mixRgb(neutralBorder, accentRgb, 0.16)
+  const input = dark ? mixRgb(neutralBorder, accentRgb, 0.25) : mixRgb(neutralBorder, accentRgb, 0.2)
+  const lineSoft = dark ? mixRgb(neutralLine, accentRgb, 0.14) : mixRgb(neutralLine, accentRgb, 0.1)
+  const lineStrong = dark ? mixRgb(neutralBorder, accentRgb, 0.26) : mixRgb(neutralBorder, accentRgb, 0.24)
+  const foreground = dark ? mixRgb(white, baseRgb, 0.08) : { r: 49, g: 63, b: 84 }
+  const mutedForeground = dark ? mixRgb(white, baseRgb, 0.34) : { r: 109, g: 124, b: 146 }
   const primaryForeground = luminance(accentRgb) > 0.62 ? mixRgb(black, accentRgb, 0.08) : white
 
   return {
-    '--background': rgbToHsl(baseRgb),
+    '--background': rgbToHsl(dark ? baseRgb : mixRgb(baseRgb, white, 0.16)),
     '--foreground': rgbToHsl(foreground),
     '--card': rgbToHsl(card),
     '--card-foreground': rgbToHsl(foreground),
@@ -106,7 +131,8 @@ function themeVars(base: string, accent: string, dark: boolean) {
     '--input': rgbToHsl(input),
     '--ring': rgbToHsl(accentRgb),
     '--line-soft': rgbToHsl(lineSoft),
-    '--line-strong': rgbToHsl(border),
+    '--line-strong': rgbToHsl(lineStrong),
+    '--contrast': contrastTone(accentRgb, dark),
   }
 }
 
@@ -152,15 +178,15 @@ export function Background({ settings }: Props) {
 
   const style = useMemo(() => {
     const density = clamp(settings.density || 24, 12, 48)
-    const opacity = clamp(settings.opacity || 0.08, 0.02, 0.24)
+    const opacity = clamp(settings.opacity || 0.065, 0.02, 0.24)
     const patternColor = hexToRgba(
       resolved.accent,
       settings.pattern === 'dots'
         ? dark
-          ? Math.min(opacity * 1.55, 0.22)
+          ? Math.min(opacity * 1.3, 0.18)
           : opacity
         : dark
-          ? Math.min(opacity * 1.45, 0.22)
+          ? Math.min(opacity * 1.22, 0.17)
           : opacity,
     )
 
@@ -168,14 +194,20 @@ export function Background({ settings }: Props) {
     let backgroundSize = 'auto'
     let backgroundPosition = '0 0'
 
+    const contrastColor = dark ? 'rgba(251, 191, 36, 0.08)' : 'rgba(251, 146, 60, 0.075)'
+    const glowA = hexToRgba(resolved.accent, dark ? 0.13 : 0.09)
+    const atmosphere = `radial-gradient(circle at 18% 8%, ${glowA}, transparent 32%), radial-gradient(circle at 86% 16%, ${contrastColor}, transparent 34%)`
+
     if (settings.pattern === 'grid') {
-      backgroundImage = `linear-gradient(to right, ${patternColor} 1px, transparent 1px), linear-gradient(to bottom, ${patternColor} 1px, transparent 1px)`
-      backgroundSize = `${density}px ${density}px`
-      backgroundPosition = '-1px -1px'
+      backgroundImage = `${atmosphere}, linear-gradient(to right, ${patternColor} 1px, transparent 1px), linear-gradient(to bottom, ${patternColor} 1px, transparent 1px)`
+      backgroundSize = `auto, ${density}px ${density}px, ${density}px ${density}px`
+      backgroundPosition = `0 0, -1px -1px, -1px -1px`
     } else if (settings.pattern === 'dots') {
       const dot = Math.max(1, Math.round(density / 20))
-      backgroundImage = `radial-gradient(circle, ${patternColor} ${dot}px, transparent ${dot + 0.6}px)`
-      backgroundSize = `${density}px ${density}px`
+      backgroundImage = `${atmosphere}, radial-gradient(circle, ${patternColor} ${dot}px, transparent ${dot + 0.6}px)`
+      backgroundSize = `auto, ${density}px ${density}px`
+    } else {
+      backgroundImage = atmosphere
     }
 
     return {

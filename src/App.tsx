@@ -25,9 +25,9 @@ const BG_KEY = 'nodeget.background-settings'
 const DEFAULT_BG: BackgroundSettings = {
   pattern: 'grid',
   baseColor: '#f5f8fb',
-  accentColor: '#b7c4d6',
+  accentColor: '#7db4d8',
   density: 22,
-  opacity: 0.09,
+  opacity: 0.055,
 }
 
 function initialView(): View {
