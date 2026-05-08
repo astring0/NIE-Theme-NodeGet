@@ -62,7 +62,6 @@ const DYN_INTERVAL_MS = 2000
 const HISTORY_LIMIT = 300
 const HISTORY_WINDOW_MS = 4 * 60 * 60 * 1000
 const HISTORY_POINTS = 80
-const HISTORY_CACHE_KEY = 'nodeget.history.cache.v13'
 const META_CACHE_KEY = 'nodeget.meta.cache.v2'
 
 function emptyMeta(): NodeMeta {
@@ -222,18 +221,8 @@ function writeJsonMap<T>(key: string, map: Map<string, T>, storage: Storage = se
   } catch {}
 }
 
-function isHistoryList(value: unknown): value is HistorySample[] {
-  return Array.isArray(value) && value.every(item => item && typeof item.t === 'number')
-}
-
 function isMeta(value: unknown): value is NodeMeta {
   return Boolean(value && typeof value === 'object' && 'name' in value && 'tags' in value)
-}
-
-function loadHistoryCache() {
-  const map = readJsonMap<HistorySample[]>(HISTORY_CACHE_KEY, isHistoryList)
-  for (const [k, list] of map) map.set(k, list.slice(-HISTORY_LIMIT))
-  return map
 }
 
 function loadMetaCache() {
@@ -243,7 +232,7 @@ function loadMetaCache() {
 export function useNodes(config: SiteConfig | null) {
   const [agents, setAgents] = useState<Map<string, Agent>>(new Map())
   const [live, setLive] = useState<Map<string, DynamicSummary>>(new Map())
-  const [history, setHistory] = useState<Map<string, HistorySample[]>>(loadHistoryCache)
+  const [history, setHistory] = useState<Map<string, HistorySample[]>>(() => new Map())
   const [errors, setErrors] = useState<BackendError[]>([])
   const [loading, setLoading] = useState(true)
   const [tick, setTick] = useState(0)
@@ -266,7 +255,7 @@ export function useNodes(config: SiteConfig | null) {
       if (!uuids.length) return
       const now = Date.now()
       const from = now - HISTORY_WINDOW_MS
-      const fields = ['cpu_usage']
+      const fields = DYNAMIC_FIELDS
       const jobs = uuids.map(uuid => ({ entry, uuid }))
       const rows = await mapLimit(jobs, 4, async ({ entry, uuid }) => {
         try {
@@ -380,17 +369,6 @@ export function useNodes(config: SiteConfig | null) {
         }
         return next
       })
-      setHistory(prev => {
-        const next = new Map(prev)
-        for (const { source, row } of updates) {
-          const key = nodeKeyFrom(source, row.uuid)
-          const arr = next.get(key) || []
-          const sample = sampleFrom(row)
-          const dedup = arr.length && arr[arr.length - 1].t === sample.t ? arr : arr.concat(sample)
-          next.set(key, dedup.slice(-HISTORY_LIMIT))
-        }
-        return next
-      })
     }
 
     const bootstrap = async () => {
@@ -408,8 +386,8 @@ export function useNodes(config: SiteConfig | null) {
       }
       setAgents(seed)
 
-      // 后端真实历史：用 Dynamic Summary 历史判断 Agent 是否曾与 Server 通信。
-      // 只取 timestamp 是否存在来画在线格子，不用历史 CPU / 内存 / 磁盘冒充展示。
+      // 后端真实历史：只从 Server Dynamic Summary 历史生成在线格子。
+      // 不读取/写入浏览器本地历史，也不把当前浏览器观察到的数据混入在线格子。
       const serverHistory = Promise.all(
         pool.entries.map(entry => fetchServerHistory(entry, sourceUuids.get(entry.name) || [])),
       )
@@ -449,14 +427,6 @@ export function useNodes(config: SiteConfig | null) {
       pool.close()
     }
   }, [config])
-
-  useEffect(() => {
-    const cached = new Map([...history].map(([key, list]) => [key, list.slice(-HISTORY_LIMIT)]))
-    // 在线状态现在是前端观察到的 Agent 通信历史；写入 localStorage，刷新后不丢。
-    writeJsonMap(HISTORY_CACHE_KEY, cached, localStorage)
-    // 同时写 sessionStorage，避免个别隐私环境禁用 localStorage 时完全丢失。
-    writeJsonMap(HISTORY_CACHE_KEY, cached, sessionStorage)
-  }, [history])
 
   const nodes = useMemo(() => {
     const now = Date.now()
