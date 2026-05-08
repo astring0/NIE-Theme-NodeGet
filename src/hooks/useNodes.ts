@@ -60,7 +60,7 @@ const META_KEYS = [
 // 官方默认值 2s 比较灵敏；魔改版的 10s 会让资源状态明显慢半拍。
 const DYN_INTERVAL_MS = 2000
 const HISTORY_LIMIT = 300
-const HISTORY_CACHE_KEY = 'nodeget.history.cache.v12'
+const HISTORY_CACHE_KEY = 'nodeget.history.cache.v13'
 const META_CACHE_KEY = 'nodeget.meta.cache.v2'
 
 function emptyMeta(): NodeMeta {
@@ -379,11 +379,11 @@ export function useNodes(config: SiteConfig | null) {
   }, [config])
 
   useEffect(() => {
-    writeJsonMap(
-      HISTORY_CACHE_KEY,
-      new Map([...history].map(([key, list]) => [key, list.slice(-HISTORY_LIMIT)])),
-      sessionStorage,
-    )
+    const cached = new Map([...history].map(([key, list]) => [key, list.slice(-HISTORY_LIMIT)]))
+    // 在线状态现在是前端观察到的 Agent 通信历史；写入 localStorage，刷新后不丢。
+    writeJsonMap(HISTORY_CACHE_KEY, cached, localStorage)
+    // 同时写 sessionStorage，避免个别隐私环境禁用 localStorage 时完全丢失。
+    writeJsonMap(HISTORY_CACHE_KEY, cached, sessionStorage)
   }, [history])
 
   const nodes = useMemo(() => {

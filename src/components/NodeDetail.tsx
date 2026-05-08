@@ -26,7 +26,6 @@ import {
   buildLatencyQualityRows,
   filterRowsByLatestSeries,
   qualitySegmentColor,
-  latencyRowsToHistory,
   type LatencyQualityRow,
 } from '../utils/latency'
 import { useNodeLatency } from '../hooks/useNodeLatency'
@@ -85,8 +84,6 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
     node?.source ?? null,
     node?.uuid ?? null,
   )
-  const serverHistory = useMemo(() => latencyRowsToHistory(tcpData, 'tcp_ping'), [tcpData])
-
   if (!node) return null
 
   const u = deriveUsage(node)
@@ -151,38 +148,38 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
         <Section title="资源">
-          <div className="flex flex-wrap justify-around gap-5 sm:gap-8">
-            <ResourceRing label="CPU" value={u.cpu} sub={loadAvg ?? undefined} size={116} strokeWidth={10} centerClassName="text-[17px] font-black text-foreground" labelClassName="mt-2 text-base font-semibold text-foreground" subClassName="mt-3 truncate text-sm font-mono text-muted-foreground" />
+          <div className="grid grid-cols-2 place-items-center gap-x-4 gap-y-6 sm:grid-cols-4 sm:gap-8">
+            <ResourceRing label="CPU" value={u.cpu} sub={loadAvg ?? undefined} size={isMobile ? 104 : 116} strokeWidth={10} centerClassName="text-[17px] font-black text-foreground" labelClassName="mt-2 text-base font-semibold text-foreground" subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground" />
             <ResourceRing
               label="内存"
               value={u.mem}
               sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : undefined}
-              size={116}
+              size={isMobile ? 104 : 116}
               strokeWidth={10}
               centerClassName="text-[17px] font-black text-foreground"
               labelClassName="mt-2 text-base font-semibold text-foreground"
-              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
+              subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground"
             />
             <ResourceRing
               label="磁盘"
               value={u.disk}
               sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : undefined}
-              size={116}
+              size={isMobile ? 104 : 116}
               strokeWidth={10}
               centerClassName="text-[17px] font-black text-foreground"
               labelClassName="mt-2 text-base font-semibold text-foreground"
-              subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
+              subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground"
             />
             {swap != null && (
               <ResourceRing
                 label="Swap"
                 value={swap}
                 sub={`${bytes(d?.used_swap)} / ${bytes(d?.total_swap)}`}
-                size={116}
+                size={isMobile ? 104 : 116}
                 strokeWidth={10}
                 centerClassName="text-[17px] font-black text-foreground"
                 labelClassName="mt-2 text-base font-semibold text-foreground"
-                subClassName="mt-3 truncate text-sm font-mono text-muted-foreground"
+                subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground"
               />
             )}
           </div>
@@ -191,8 +188,6 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
         <Section title="在线状态">
           <OnlineStatusBar
             history={history}
-            serverHistory={serverHistory}
-            loading={latencyLoading}
             online={node.online}
             intervalMinutes={3}
             slots={onlineSlots}

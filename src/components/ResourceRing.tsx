@@ -44,11 +44,7 @@ export function ResourceRing({
     '--metric-glow': glow,
   } as CSSProperties
 
-  const activeValueClass = animated.animating && animated.trend === 'up'
-    ? 'text-rose-500 dark:text-rose-400'
-    : animated.animating && animated.trend === 'down'
-      ? 'text-amber-500 dark:text-amber-400'
-      : ''
+  const activeValueColor = animated.animating ? deltaColor(animated.delta) : undefined
 
   return (
     <div className="min-w-0 text-center" title={subTitle || sub || undefined}>
@@ -90,7 +86,7 @@ export function ResourceRing({
         />
 
         <div className="absolute inset-0 z-[2] flex flex-col items-center justify-center leading-none">
-          <span className={cn(centerClassName, 'transition-colors duration-150', activeValueClass)}>
+          <span className={cn(centerClassName, 'transition-colors duration-150')} style={{ color: activeValueColor }}>
             {Number.isFinite(value) ? pct(animated.value) : '—'}
           </span>
           <span className={labelClassName}>{label}</span>
@@ -118,4 +114,20 @@ export function metricGlow(v?: number | null) {
   if (v >= 90) return 'rgba(245, 101, 101, 0.20)'
   if (v >= 70) return 'rgba(246, 173, 85, 0.18)'
   return 'rgba(66, 185, 131, 0.18)'
+}
+
+function deltaColor(delta: number) {
+  const abs = Math.min(Math.abs(delta), 90)
+  if (abs < 3) return undefined
+  const strength = abs / 90
+  if (delta > 0) {
+    // 小幅上涨：浅橙；大幅上涨：深红。看涨幅，不看当前基础值。
+    const hue = 38 - strength * 38
+    const lightness = 60 - strength * 16
+    return `hsl(${hue}, 86%, ${lightness}%)`
+  }
+  // 小幅下降：浅蓝；大幅下降：深冷蓝。
+  const hue = 204 + strength * 28
+  const lightness = 62 - strength * 26
+  return `hsl(${hue}, 84%, ${lightness}%)`
 }

@@ -7,6 +7,7 @@ export interface AnimatedNumberState {
   target: number
   trend: AnimatedTrend
   animating: boolean
+  delta: number
 }
 
 function easeInOutAccelerated(progress: number) {
@@ -29,6 +30,7 @@ export function useAnimatedNumber(targetInput: number, duration = 900): Animated
   const [value, setValue] = useState(safeTarget)
   const [trend, setTrend] = useState<AnimatedTrend>('steady')
   const [animating, setAnimating] = useState(false)
+  const [deltaState, setDeltaState] = useState(0)
   const currentRef = useRef(safeTarget)
 
   useEffect(() => {
@@ -40,11 +42,13 @@ export function useAnimatedNumber(targetInput: number, duration = 900): Animated
       currentRef.current = to
       setValue(to)
       setTrend('steady')
+      setDeltaState(0)
       setAnimating(false)
       return
     }
 
     setTrend(delta > 0 ? 'up' : 'down')
+    setDeltaState(delta)
     setAnimating(true)
 
     let frame = 0
@@ -64,6 +68,7 @@ export function useAnimatedNumber(targetInput: number, duration = 900): Animated
         currentRef.current = to
         setValue(to)
         setTrend('steady')
+        setDeltaState(0)
         setAnimating(false)
       }
     }
@@ -76,5 +81,5 @@ export function useAnimatedNumber(targetInput: number, duration = 900): Animated
     }
   }, [duration, safeTarget])
 
-  return { value, target: safeTarget, trend, animating }
+  return { value, target: safeTarget, trend, animating, delta: deltaState }
 }

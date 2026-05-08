@@ -1,5 +1,4 @@
 import { ArrowDown, ArrowUp, Clock, type LucideIcon } from 'lucide-react'
-import { useMemo } from 'react'
 import { Badge } from './ui/badge'
 import { Card } from './ui/card'
 import { Flag } from './Flag'
@@ -13,7 +12,6 @@ import { cn } from '../utils/cn'
 import { useAnimatedNumber } from '../hooks/useAnimatedNumber'
 import { useInViewport } from '../hooks/useInViewport'
 import { useNodeTcpLatency } from '../hooks/useNodeTcpLatency'
-import { latencyRowsToHistory } from '../utils/latency'
 import type { BackendPool } from '../api/pool'
 import type { Node } from '../types'
 import { nodeKey } from '../utils/nodeKey'
@@ -32,8 +30,6 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
     refreshMs: 90_000,
     priority: visible ? 'high' : 'normal',
   })
-  const serverHistory = useMemo(() => latencyRowsToHistory(tcpData, 'tcp_ping'), [tcpData])
-
   return (
     <a ref={ref} href={`#${encodeURIComponent(nodeKey(node))}`} className="block h-full">
       <Card
@@ -77,7 +73,7 @@ export function NodeCard({ node, pool }: { node: Node; pool: BackendPool | null 
           />
         </div>
 
-        <OnlineStatusBar history={node.history || []} serverHistory={serverHistory} loading={tcpLoading} online={node.online} compact slots={40} intervalMinutes={3} />
+        <OnlineStatusBar history={node.history || []} online={node.online} compact slots={40} intervalMinutes={3} />
 
         <MiniTcpingPanel node={node} tcpData={tcpData} loading={tcpLoading} error={tcpError} />
 
