@@ -31,11 +31,11 @@ NodeGet StatusShow 前端主题版。
 
 ### Cloudflare Workers
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/3257085208/NodeGet-StatusShow)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/3257085208/NIE-Theme-NodeGet)
 
 ### Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/3257085208/NodeGet-StatusShow&project-name=nodeget-statusshow&repository-name=NodeGet-StatusShow&env=SITE_NAME,SITE_LOGO,SITE_FOOTER,SITE_1,SITE_2&envDescription=NodeGet%20StatusShow%20Config&envLink=https://nodeget.com/guide/install/status-show)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/3257085208/NIE-Theme-NodeGet&project-name=NIE-Theme-NodeGet&repository-name=NIE-Theme-NodeGet&env=SITE_NAME,SITE_LOGO,SITE_FOOTER,SITE_1,SITE_2&envDescription=NodeGet%20StatusShow%20Config&envLink=https://nodeget.com/guide/install/status-show)
 
 ## 配置方式
 
@@ -108,8 +108,8 @@ https://nodeget.com/guide/install/status-show
 ## 本地开发
 
 ```bash
-git clone https://github.com/3257085208/NodeGet-StatusShow.git
-cd NodeGet-StatusShow
+git clone https://github.com/3257085208/NIE-Theme-NodeGet.git
+cd NIE-Theme-NodeGet
 npm install
 npm run dev
 ```
@@ -168,7 +168,7 @@ public/custom.js
 主题仓库：
 
 ```txt
-https://github.com/3257085208/NodeGet-StatusShow
+https://github.com/3257085208/NIE-Theme-NodeGet
 ```
 
 NodeGet：
