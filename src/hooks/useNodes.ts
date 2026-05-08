@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BackendPool } from '../api/pool'
-import { dynamicSummaryAvg, dynamicSummaryMulti, dynamicSummaryQuery, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
+import { dynamicDataAvg, dynamicDataQuery, dynamicSummaryMulti, kvGetMulti, listAgentUuids, staticDataMulti } from '../api/methods'
 import { isOnline, normalizeMs } from '../utils/status'
 import { nodeKeyFrom } from '../utils/nodeKey'
 import type { DynamicSummary, HistorySample, Node, NodeMeta, SiteConfig } from '../types'
@@ -42,6 +42,7 @@ const DYNAMIC_FIELDS = [
   'tcp_connections',
   'udp_connections',
 ]
+const HISTORY_FIELDS = ['cpu', 'ram', 'disk', 'network']
 const META_KEYS = [
   'metadata_name',
   'metadata_region',
@@ -171,8 +172,67 @@ function sampleFrom(row: DynamicSummary): HistorySample {
   }
 }
 
-function isUsableHistoryRow(row: DynamicSummary | null | undefined) {
-  return Boolean(row?.timestamp && normalizeMs(row.timestamp))
+
+function numberValue(value: unknown) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function pickNumber(obj: Record<string, unknown> | null | undefined, keys: string[]) {
+  if (!obj) return null
+  for (const key of keys) {
+    const value = numberValue(obj[key])
+    if (value != null) return value
+  }
+  return null
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function sampleFromHistoryRow(row: Record<string, unknown>): HistorySample | null {
+  const t = normalizeMs(Number(row.timestamp))
+  if (!t) return null
+
+  const cpu = objectValue(row.cpu)
+  const ram = objectValue(row.ram)
+  const disk = objectValue(row.disk)
+  const network = objectValue(row.network)
+
+  const totalMemory = pickNumber(ram, ['total_memory'])
+  const usedMemory = pickNumber(ram, ['used_memory'])
+  const availableMemory = pickNumber(ram, ['available_memory'])
+  const totalDisk = pickNumber(disk, ['total_space', 'total_disk', 'total'])
+  const availableDisk = pickNumber(disk, ['available_space', 'available_disk', 'available'])
+  const usedDisk = pickNumber(disk, ['used_space', 'used_disk', 'used'])
+
+  return {
+    t,
+    cpu: pickNumber(cpu, ['total_cpu_usage', 'cpu_usage']),
+    mem: totalMemory
+      ? usedMemory != null
+        ? (usedMemory / totalMemory) * 100
+        : availableMemory != null
+          ? ((totalMemory - availableMemory) / totalMemory) * 100
+          : null
+      : null,
+    disk: totalDisk
+      ? usedDisk != null
+        ? (usedDisk / totalDisk) * 100
+        : availableDisk != null
+          ? ((totalDisk - availableDisk) / totalDisk) * 100
+          : null
+      : null,
+    netIn: pickNumber(network, ['receive_speed', 'rx_speed', 'download_speed']) ?? 0,
+    netOut: pickNumber(network, ['transmit_speed', 'tx_speed', 'upload_speed']) ?? 0,
+  }
+}
+
+function isUsableHistoryRow(row: Record<string, unknown> | null | undefined) {
+  return Boolean(row?.timestamp && normalizeMs(Number(row.timestamp)))
 }
 
 function mergeHistory(existing: HistorySample[] | undefined, incoming: HistorySample[]) {
@@ -255,20 +315,20 @@ export function useNodes(config: SiteConfig | null) {
       if (!uuids.length) return
       const now = Date.now()
       const from = now - HISTORY_WINDOW_MS
-      const fields = DYNAMIC_FIELDS
+      const fields = HISTORY_FIELDS
       const jobs = uuids.map(uuid => ({ entry, uuid }))
       const rows = await mapLimit(jobs, 4, async ({ entry, uuid }) => {
         try {
-          const avgRows = await dynamicSummaryAvg(entry.client, uuid, fields, from, now, HISTORY_POINTS)
-          const samples = (avgRows || []).filter(isUsableHistoryRow).map(sampleFrom)
+          const avgRows = await dynamicDataAvg(entry.client, uuid, fields, from, now, HISTORY_POINTS)
+          const samples = (avgRows || []).filter(isUsableHistoryRow).map(sampleFromHistoryRow).filter((s): s is HistorySample => Boolean(s))
           if (samples.length) return { source: entry.name, uuid, samples }
         } catch {
           // SQLite / older backend may not support avg; fall back to raw summary rows.
         }
 
         try {
-          const rawRows = await dynamicSummaryQuery(entry.client, uuid, fields, from, now, 1800)
-          const samples = (rawRows || []).filter(isUsableHistoryRow).map(sampleFrom)
+          const rawRows = await dynamicDataQuery(entry.client, uuid, fields, from, now, 1800)
+          const samples = (rawRows || []).filter(isUsableHistoryRow).map(sampleFromHistoryRow).filter((s): s is HistorySample => Boolean(s))
           return { source: entry.name, uuid, samples }
         } catch {
           return { source: entry.name, uuid, samples: [] as HistorySample[] }

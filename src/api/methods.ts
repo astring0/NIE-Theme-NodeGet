@@ -11,7 +11,7 @@ export const dynamicSummaryMulti = (c: RpcClient, uuids: string[], fields: strin
   c.call<DynamicSummary[]>('agent_dynamic_summary_multi_last_query', { uuids, fields })
 
 
-export const dynamicSummaryAvg = (
+export const dynamicDataAvg = (
   c: RpcClient,
   uuid: string,
   fields: string[],
@@ -19,10 +19,10 @@ export const dynamicSummaryAvg = (
   timestamp_to: number,
   points: number,
 ) =>
-  c.call<DynamicSummary[]>(
-    'agent_query_dynamic_summary_avg',
+  c.call<Record<string, unknown>[]>(
+    'agent_query_dynamic_avg',
     {
-      dynamic_summary_avg_query: {
+      dynamic_data_avg_query: {
         fields,
         uuid,
         timestamp_from,
@@ -33,7 +33,7 @@ export const dynamicSummaryAvg = (
     18_000,
   )
 
-export const dynamicSummaryQuery = (
+export const dynamicDataQuery = (
   c: RpcClient,
   uuid: string,
   fields: string[],
@@ -41,10 +41,10 @@ export const dynamicSummaryQuery = (
   timestamp_to: number,
   limit: number,
 ) =>
-  c.call<DynamicSummary[]>(
-    'agent_query_dynamic_summary',
+  c.call<Record<string, unknown>[]>(
+    'agent_query_dynamic',
     {
-      dynamic_summary_query: {
+      dynamic_data_query: {
         fields,
         condition: [
           { uuid },
