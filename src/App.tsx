@@ -306,7 +306,7 @@ export function App() {
           onBackgroundSettingsChange={setBackgroundSettings}
         />
 
-        <main className="flex-1 w-full px-4 pb-4 pt-[6.25rem] sm:px-6 sm:pb-6 sm:pt-[6.75rem]">
+        <main className="flex-1 w-full px-4 pb-4 pt-[6.9rem] sm:px-6 sm:pb-6 sm:pt-[7.6rem]">
           <div className="mx-auto w-full max-w-[91.5rem]">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[18rem_minmax(0,72rem)] xl:justify-center xl:items-start">
               {!empty && (

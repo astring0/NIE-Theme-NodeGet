@@ -70,8 +70,8 @@ export function Navbar({
   const togglePanel = (next: MobilePanel) => setPanel(cur => (cur === next ? null : next))
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 px-3 pb-2 pt-3 sm:px-6">
-      <div className="relative mx-auto max-w-7xl overflow-visible">
+    <header className="fixed inset-x-0 top-0 z-50 px-4 pb-2 pt-3 sm:px-6">
+      <div className="relative mx-auto w-full max-w-[91.5rem] overflow-visible">
         <div
           className={`overflow-visible rounded-2xl border border-border/80 bg-background/90 shadow-[0_14px_36px_rgba(15,23,42,0.08)] backdrop-blur transition-shadow duration-150 dark:shadow-[0_16px_42px_rgba(0,0,0,0.32)] ${
             stuck ? 'shadow-[0_18px_44px_rgba(15,23,42,0.12)] dark:shadow-[0_20px_52px_rgba(0,0,0,0.42)]' : ''
