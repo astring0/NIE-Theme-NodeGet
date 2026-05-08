@@ -162,3 +162,19 @@
   transition-duration: 0s !important;
   animation-duration: 0s !important;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(button:not(:disabled), a, [role='button']) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform, filter;
+    transition-duration: 160ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  :where(button:not(:disabled), [role='button']):active {
+    transform: scale(0.985);
+  }
+
+  .card-soft:hover {
+    transform: translateY(-1px);
+  }
+}

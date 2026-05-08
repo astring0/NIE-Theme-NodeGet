@@ -127,7 +127,7 @@ export function WorldMap({ nodes, onOpen }: Props) {
           <button
             type="button"
             className={cn(
-              'rounded-lg px-4 py-2 text-sm font-black transition-colors',
+              'rounded-lg px-4 py-2 text-sm font-black transition-all duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]',
               mode === '2d' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => setMode('2d')}
@@ -137,7 +137,7 @@ export function WorldMap({ nodes, onOpen }: Props) {
           <button
             type="button"
             className={cn(
-              'rounded-lg px-4 py-2 text-sm font-black transition-colors',
+              'rounded-lg px-4 py-2 text-sm font-black transition-all duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]',
               mode === '3d' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
             )}
             onClick={() => setMode('3d')}
@@ -308,6 +308,7 @@ function FlatWorldMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: n
 }
 
 function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: number; onOpen?: (id: string) => void }) {
+  const shellRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [world, setWorld] = useState<GlobeWorldData | null>(null)
   const [scale, setScale] = useState(GLOBE_DEFAULT_SCALE)
@@ -316,6 +317,8 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
   const closeTimer = useRef<number | null>(null)
   const dragRef = useRef<{ x: number; y: number; rotation: [number, number, number] } | null>(null)
   const pinchRef = useRef<{ distance: number; scale: number } | null>(null)
+  const scaleRef = useRef(GLOBE_DEFAULT_SCALE)
+  const hoverKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -333,6 +336,37 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
     return () => {
       cancelled = true
     }
+  }, [])
+
+  useEffect(() => {
+    scaleRef.current = scale
+  }, [scale])
+
+  useEffect(() => {
+    hoverKeyRef.current = hoverKey
+  }, [hoverKey])
+
+  useEffect(() => {
+    const shell = shellRef.current
+    if (!shell) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      applyScale(scaleRef.current - event.deltaY * 0.08)
+    }
+    shell.addEventListener('wheel', onWheel, { passive: false })
+    return () => shell.removeEventListener('wheel', onWheel)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      if (dragRef.current || pinchRef.current || hoverKeyRef.current) return
+      setRotation(current => [current[0] + 0.035, current[1], 0])
+    }, 64)
+    return () => window.clearInterval(timer)
   }, [])
 
   const projected = useMemo(() => {
@@ -373,20 +407,36 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
     context.save()
     context.beginPath()
     path({ type: 'Sphere' } as any)
-    context.fillStyle = 'rgba(203,213,225,0.78)'
+    context.shadowColor = 'rgba(15,23,42,0.24)'
+    context.shadowBlur = 38
+    context.shadowOffsetX = 0
+    context.shadowOffsetY = 18
+    context.fillStyle = 'rgba(148,163,184,0.22)'
     context.fill()
-    context.shadowColor = 'rgba(15,23,42,0.12)'
-    context.shadowBlur = 28
-    context.strokeStyle = 'rgba(148,163,184,0.45)'
+    context.restore()
+
+    context.save()
+    context.beginPath()
+    path({ type: 'Sphere' } as any)
+    context.fillStyle = 'rgba(203,213,225,0.82)'
+    context.fill()
+    context.strokeStyle = 'rgba(148,163,184,0.48)'
     context.lineWidth = 1.2
     context.stroke()
     context.clip()
 
-    const sphereShade = context.createRadialGradient(MAP_W * 0.4, MAP_H * 0.34, scale * 0.12, MAP_W * 0.52, MAP_H * 0.48, scale * 1.08)
-    sphereShade.addColorStop(0, 'rgba(255,255,255,0.36)')
-    sphereShade.addColorStop(0.5, 'rgba(255,255,255,0.08)')
-    sphereShade.addColorStop(1, 'rgba(15,23,42,0.16)')
+    const sphereShade = context.createRadialGradient(MAP_W * 0.38, MAP_H * 0.3, scale * 0.1, MAP_W * 0.56, MAP_H * 0.54, scale * 1.12)
+    sphereShade.addColorStop(0, 'rgba(255,255,255,0.48)')
+    sphereShade.addColorStop(0.42, 'rgba(255,255,255,0.08)')
+    sphereShade.addColorStop(0.82, 'rgba(15,23,42,0.18)')
+    sphereShade.addColorStop(1, 'rgba(15,23,42,0.32)')
     context.fillStyle = sphereShade
+    context.fillRect(0, 0, MAP_W, MAP_H)
+
+    const rimShade = context.createRadialGradient(MAP_W * 0.5, MAP_H * 0.5, scale * 0.72, MAP_W * 0.5, MAP_H * 0.5, scale * 1.04)
+    rimShade.addColorStop(0, 'rgba(255,255,255,0)')
+    rimShade.addColorStop(1, 'rgba(15,23,42,0.22)')
+    context.fillStyle = rimShade
     context.fillRect(0, 0, MAP_W, MAP_H)
 
     context.beginPath()
@@ -428,7 +478,9 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
   }
 
   function applyScale(next: number) {
-    setScale(clamp(next, GLOBE_MIN_SCALE, GLOBE_MAX_SCALE))
+    const value = clamp(next, GLOBE_MIN_SCALE, GLOBE_MAX_SCALE)
+    scaleRef.current = value
+    setScale(value)
   }
 
   function onMouseDown(event: React.MouseEvent<HTMLCanvasElement>) {
@@ -440,11 +492,12 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
       if (!dragRef.current) return
       const dx = event.clientX - dragRef.current.x
       const dy = event.clientY - dragRef.current.y
-      setRotation([
+      const nextRotation: [number, number, number] = [
         dragRef.current.rotation[0] + dx * 0.38,
         clamp(dragRef.current.rotation[1] - dy * 0.32, -75, 75),
         0,
-      ])
+      ]
+      setRotation(nextRotation)
     }
     const onUp = () => {
       dragRef.current = null
@@ -480,11 +533,12 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
       const touch = event.touches[0]
       const dx = touch.clientX - dragRef.current.x
       const dy = touch.clientY - dragRef.current.y
-      setRotation([
+      const nextRotation: [number, number, number] = [
         dragRef.current.rotation[0] + dx * 0.4,
         clamp(dragRef.current.rotation[1] - dy * 0.34, -75, 75),
         0,
-      ])
+      ]
+      setRotation(nextRotation)
       return
     }
     if (event.touches.length >= 2 && pinchRef.current) {
@@ -497,6 +551,7 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
   }
 
   function resetView() {
+    scaleRef.current = GLOBE_DEFAULT_SCALE
     setRotation(GLOBE_DEFAULT_ROTATION)
     setScale(GLOBE_DEFAULT_SCALE)
     setHoverKey(null)
@@ -504,8 +559,9 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
 
   return (
     <div
-      className="relative w-full overflow-hidden rounded-md border border-border/60 bg-background/45 text-foreground"
-      style={{ aspectRatio: `${MAP_W} / ${MAP_H}` }}
+      ref={shellRef}
+      className="relative w-full overflow-hidden rounded-md border border-border/60 bg-background/45 text-foreground shadow-[inset_0_0_42px_rgba(148,163,184,0.16)]"
+      style={{ aspectRatio: `${MAP_W} / ${MAP_H}`, overscrollBehavior: 'contain' }}
       onClick={() => setHoverKey(null)}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.24),transparent_64%)]" />
@@ -516,10 +572,6 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
         height={MAP_H}
         className="absolute inset-0 h-full w-full touch-none cursor-grab active:cursor-grabbing"
         onMouseDown={onMouseDown}
-        onWheel={event => {
-          event.preventDefault()
-          applyScale(scale - event.deltaY * 0.08)
-        }}
         onTouchStart={onTouchStart}
         onTouchMove={event => {
           event.preventDefault()
@@ -531,18 +583,18 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
         }}
       />
 
-      <div className="absolute left-3 top-3 z-10 rounded-xl border border-border/80 bg-background/90 px-3 py-2 text-xs font-semibold text-muted-foreground shadow-sm backdrop-blur">
+      <div className="absolute left-3 top-3 z-10 rounded-xl border border-border/80 bg-background/90 px-3 py-2 text-xs font-semibold text-muted-foreground shadow-sm backdrop-blur transition-opacity duration-200">
         拖动旋转，滚轮 / 双指 / 按钮缩放
       </div>
 
       <div className="absolute right-3 top-3 z-10 flex flex-col gap-2">
-        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92" onClick={e => { e.stopPropagation(); applyScale(scale + 16) }}>
+        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92 transition-all duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-95" onClick={e => { e.stopPropagation(); applyScale(scale + 16) }}>
           <Plus className="h-4 w-4" />
         </Button>
-        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92" onClick={e => { e.stopPropagation(); applyScale(scale - 16) }}>
+        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92 transition-all duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-95" onClick={e => { e.stopPropagation(); applyScale(scale - 16) }}>
           <Minus className="h-4 w-4" />
         </Button>
-        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92" onClick={e => { e.stopPropagation(); resetView() }}>
+        <Button type="button" variant="outline" size="icon" className="h-10 w-10 rounded-xl bg-background/92 transition-all duration-200 ease-out hover:-translate-y-0.5 active:translate-y-0 active:scale-95" onClick={e => { e.stopPropagation(); resetView() }}>
           <RotateCcw className="h-4 w-4" />
         </Button>
       </div>
@@ -556,8 +608,8 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
           return (
             <div
               key={group.key}
-              className="absolute pointer-events-auto"
-              style={{ left: `${(group.x / MAP_W) * 100}%`, top: `${(group.y / MAP_H) * 100}%`, transform: 'translate(-50%, -50%)' }}
+              className="absolute pointer-events-auto transition-transform duration-300 ease-out will-change-transform"
+              style={{ left: `${(group.x / MAP_W) * 100}%`, top: `${(group.y / MAP_H) * 100}%`, transform: `translate(-50%, -50%) scale(${isOpen ? 1.08 : 1})` }}
               onMouseEnter={() => {
                 cancelClose()
                 setHoverKey(group.key)
@@ -566,7 +618,7 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
             >
               <button
                 type="button"
-                className="relative flex h-8 w-8 items-center justify-center"
+                className="relative flex h-8 w-8 items-center justify-center transition-transform duration-200 ease-out hover:scale-110 active:scale-95"
                 onClick={event => {
                   event.stopPropagation()
                   if (isCluster) setHoverKey(isOpen ? null : group.key)
@@ -575,7 +627,7 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
                 aria-label={isCluster ? `${group.nodes.length} 个节点` : displayName(group.nodes[0])}
               >
                 <span
-                  className="absolute rounded-full"
+                  className="absolute rounded-full transition-all duration-300 ease-out"
                   style={{
                     width: isOpen ? 28 : 22,
                     height: isOpen ? 28 : 22,
@@ -584,7 +636,7 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
                   }}
                 />
                 <span
-                  className="absolute rounded-full"
+                  className="absolute rounded-full transition-all duration-300 ease-out"
                   style={{
                     width: isOpen ? 38 : 30,
                     height: isOpen ? 38 : 30,
@@ -592,9 +644,9 @@ function Globe3DMap({ groups, total, onOpen }: { groups: NodeGroup[]; total: num
                     opacity: isOpen ? 0.2 : 0.1,
                   }}
                 />
-                {group.onlineCount > 0 && <span className="absolute h-5 w-5 animate-ping rounded-full" style={{ backgroundColor: color, opacity: 0.18 }} />}
+                {group.onlineCount > 0 && <span className="absolute h-5 w-5 animate-ping rounded-full transition-opacity duration-300" style={{ backgroundColor: color, opacity: 0.18 }} />}
                 <span
-                  className="relative flex items-center justify-center rounded-full text-[10px] font-black text-white shadow-[0_0_12px_rgba(15,23,42,0.25)]"
+                  className="relative flex items-center justify-center rounded-full text-[10px] font-black text-white shadow-[0_0_12px_rgba(15,23,42,0.25)] transition-all duration-300 ease-out"
                   style={{
                     width: isCluster ? 16 : isOpen ? 10 : 9,
                     height: isCluster ? 16 : isOpen ? 10 : 9,
@@ -717,7 +769,7 @@ function MapNodePopoverCard({
 }) {
   return (
     <div
-      className="rounded-sm border border-border/90 bg-card/95 text-card-foreground shadow-[0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur py-1.5 px-1.5 max-h-[334px] overflow-auto"
+      className="rounded-sm border border-border/90 bg-card/95 text-card-foreground shadow-[0_14px_30px_rgba(15,23,42,0.14)] backdrop-blur py-1.5 px-1.5 max-h-[334px] overflow-auto animate-in fade-in-0 zoom-in-95 duration-150"
       onClick={e => e.stopPropagation()}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
