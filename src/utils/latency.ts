@@ -39,12 +39,12 @@ export function latencyColor(name: string) {
 }
 
 export function qualitySegmentColor(v: number | null) {
-  if (v == null) return LATENCY_BUCKET_COLORS.deepRed // 丢包 / 无数据：深红
-  if (v <= 45) return LATENCY_BUCKET_COLORS.deepGreen // <=45ms：深绿
-  if (v <= 90) return LATENCY_BUCKET_COLORS.lightGreen // 45-90ms：浅绿
-  if (v <= 160) return LATENCY_BUCKET_COLORS.lightYellow // 90-160ms：浅黄
-  if (v <= 300) return LATENCY_BUCKET_COLORS.deepYellow // 160-300ms：深黄
-  return LATENCY_BUCKET_COLORS.lightRed // >300ms：浅红
+  if (v == null) return LATENCY_BUCKET_COLORS.deepRed
+  if (v <= 45) return LATENCY_BUCKET_COLORS.deepGreen
+  if (v <= 90) return LATENCY_BUCKET_COLORS.lightGreen
+  if (v <= 160) return LATENCY_BUCKET_COLORS.lightYellow
+  if (v <= 300) return LATENCY_BUCKET_COLORS.deepYellow
+  return LATENCY_BUCKET_COLORS.lightRed
 }
 
 export function normalizeTs(ts: number) {

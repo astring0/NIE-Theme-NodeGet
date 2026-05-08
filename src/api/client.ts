@@ -125,8 +125,6 @@ export class RpcClient {
         log(this.name, `close code=${ev.code} pending=${this.pending.size}`)
       }
       if (!this.closed) {
-        // Important: create a fresh readiness promise before reconnecting.
-        // Otherwise the first failed connection leaves opened/call() permanently rejected.
         this.resetReady()
         setTimeout(() => this.connect(), RECONNECT_DELAY_MS)
       }

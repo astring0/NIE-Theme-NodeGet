@@ -75,7 +75,6 @@ export async function fetchLatencyRows(
     const now = Date.now()
     const window: [number, number] = [now - windowMs, now]
 
-    // 保持和官方 StatusShow 兼容的 task_query 条件格式。
     return clean(
       await taskQuery(
         client,

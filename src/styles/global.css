@@ -178,3 +178,29 @@
     transform: translateY(-1px);
   }
 }
+
+@keyframes globe-node-pulse {
+  0% {
+    opacity: 0.16;
+    transform: scale(0.72);
+  }
+  58% {
+    opacity: 0.035;
+    transform: scale(1.65);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.82);
+  }
+}
+
+.globe-node-pulse {
+  animation: globe-node-pulse 4.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .globe-node-pulse {
+    animation: none;
+    opacity: 0.12;
+  }
+}
