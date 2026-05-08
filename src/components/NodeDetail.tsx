@@ -92,8 +92,6 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
   const tags = node.meta?.tags ?? []
   const virt = virtLabel(node)
   const logo = distroLogo(node)
-  const swap =
-    d?.total_swap && d.used_swap != null ? (d.used_swap / d.total_swap) * 100 : undefined
   const loadAvg =
     d?.load_one != null && d?.load_five != null && d?.load_fifteen != null
       ? `${d.load_one.toFixed(2)} / ${d.load_five.toFixed(2)} / ${d.load_fifteen.toFixed(2)}`
@@ -146,14 +144,14 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8">
         <Section title="资源">
           <div className="grid grid-cols-2 place-items-center gap-x-4 gap-y-6 sm:grid-cols-4 sm:gap-8">
-            <ResourceRing label="CPU" value={u.cpu} sub={loadAvg ?? undefined} size={isMobile ? 104 : 116} strokeWidth={10} centerClassName="text-[17px] font-black text-foreground" labelClassName="mt-2 text-base font-semibold text-foreground" subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground" />
+            <ResourceRing label="CPU" value={u.cpu} sub={loadAvg ?? undefined} size={isMobile ? 112 : 124} strokeWidth={10} centerClassName="text-[18px] font-black text-foreground" labelClassName="mt-2 text-base font-semibold text-foreground" subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground" />
             <ResourceRing
               label="内存"
               value={u.mem}
               sub={u.memTotal ? `${bytes(u.memUsed)} / ${bytes(u.memTotal)}` : undefined}
-              size={isMobile ? 104 : 116}
+              size={isMobile ? 112 : 124}
               strokeWidth={10}
-              centerClassName="text-[17px] font-black text-foreground"
+              centerClassName="text-[18px] font-black text-foreground"
               labelClassName="mt-2 text-base font-semibold text-foreground"
               subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground"
             />
@@ -161,24 +159,22 @@ export function NodeDetail({ node, onClose, showSource, pool }: Props) {
               label="磁盘"
               value={u.disk}
               sub={u.diskTotal ? `${bytes(u.diskUsed)} / ${bytes(u.diskTotal)}` : undefined}
-              size={isMobile ? 104 : 116}
+              size={isMobile ? 112 : 124}
               strokeWidth={10}
-              centerClassName="text-[17px] font-black text-foreground"
+              centerClassName="text-[18px] font-black text-foreground"
               labelClassName="mt-2 text-base font-semibold text-foreground"
               subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground"
             />
-            {swap != null && (
-              <ResourceRing
-                label="Swap"
-                value={swap}
-                sub={`${bytes(d?.used_swap)} / ${bytes(d?.total_swap)}`}
-                size={isMobile ? 104 : 116}
-                strokeWidth={10}
-                centerClassName="text-[17px] font-black text-foreground"
-                labelClassName="mt-2 text-base font-semibold text-foreground"
-                subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground"
-              />
-            )}
+            <ResourceRing
+              label="Swap"
+              value={u.swap}
+              sub={u.swapTotal ? `${bytes(u.swapUsed)} / ${bytes(u.swapTotal)}` : '无 Swap'}
+              size={isMobile ? 112 : 124}
+              strokeWidth={10}
+              centerClassName="text-[18px] font-black text-foreground"
+              labelClassName="mt-2 text-base font-semibold text-foreground"
+              subClassName="mt-3 max-w-[9rem] truncate text-sm font-mono text-muted-foreground"
+            />
           </div>
         </Section>
 

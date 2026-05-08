@@ -201,6 +201,9 @@ export interface Usage {
   disk?: number
   diskUsed: number
   diskTotal: number
+  swap?: number
+  swapUsed: number
+  swapTotal: number
   netIn?: number
   netOut?: number
   uptime?: number

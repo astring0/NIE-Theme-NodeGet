@@ -12,6 +12,8 @@ export function deriveUsage(node: Node): Usage {
   const memTotal = d?.total_memory ?? 0
   const diskTotal = d?.total_space ?? 0
   const diskUsed = diskTotal && d?.available_space != null ? diskTotal - d.available_space : 0
+  const swapUsed = d?.used_swap ?? 0
+  const swapTotal = d?.total_swap ?? 0
   return {
     cpu: d?.cpu_usage,
     mem: memTotal ? (memUsed / memTotal) * 100 : undefined,
@@ -20,6 +22,9 @@ export function deriveUsage(node: Node): Usage {
     disk: diskTotal ? (diskUsed / diskTotal) * 100 : undefined,
     diskUsed,
     diskTotal,
+    swap: swapTotal ? (swapUsed / swapTotal) * 100 : undefined,
+    swapUsed,
+    swapTotal,
     netIn: d?.receive_speed,
     netOut: d?.transmit_speed,
     uptime: d?.uptime,
